@@ -62,14 +62,10 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
       }));
 
       const wb = XLSX.utils.book_new();
-      const ws1 = XLSX.utils.json_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, ws1, 'الملخص');
-      const ws2 = XLSX.utils.json_to_sheet(statusData);
-      XLSX.utils.book_append_sheet(wb, ws2, 'توزيع الحالات');
-      const ws3 = XLSX.utils.json_to_sheet(requesterData);
-      XLSX.utils.book_append_sheet(wb, ws3, 'أكثر الجهات طلباً');
-      const ws4 = XLSX.utils.json_to_sheet(monthlyData);
-      XLSX.utils.book_append_sheet(wb, ws4, 'الاتجاه الشهري');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryData), 'الملخص');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(statusData), 'توزيع الحالات');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(requesterData), 'أكثر الجهات طلباً');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlyData), 'الاتجاه الشهري');
 
       const fileName = `تقرير_الإحصائيات_${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.xlsx`;
       XLSX.writeFile(wb, fileName);
@@ -103,19 +99,35 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
   if (!stats) return null;
 
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-  const delayedRate = stats.total > 0 ? Math.round((stats.delayed / stats.total) * 100) : 0;
   const avgMonthly = stats.monthlyTrend.length > 0
     ? Math.round(stats.monthlyTrend.reduce((sum, item) => sum + item.count, 0) / stats.monthlyTrend.length)
     : 0;
-
   const maxMonth = stats.monthlyTrend.length > 0
     ? stats.monthlyTrend.reduce((max, item) => item.count > max.count ? item : max, stats.monthlyTrend[0])
     : null;
-
   const alertCount = (stats.overdue || 0) + (stats.expiringToday || 0);
+
+  // ✅ بيانات موحدة للبطاقات الإحصائية
+  const statCards = [
+    { label: 'إجمالي', value: stats.total, icon: 'fa-clipboard-list', color: 'dashboard-card' },
+    { label: 'منجز', value: stats.completed, icon: 'fa-check-circle', color: 'dashboard-card-green' },
+    { label: 'قيد التنفيذ', value: stats.inProgress, icon: 'fa-spinner', color: 'dashboard-card-yellow' },
+    { label: 'معلق', value: stats.pending, icon: 'fa-clock', color: 'dashboard-card-red' },
+    { label: 'ملغي', value: stats.cancelled, icon: 'fa-times-circle', color: 'dashboard-card-purple' },
+    { label: 'متأخر', value: stats.delayed, icon: 'fa-exclamation-triangle', color: 'dashboard-card-orange' },
+  ];
+
+  // ✅ بيانات الإحصائيات الإضافية
+  const extraStats = [
+    { label: 'نسبة الإنجاز', value: `${completionRate}%`, color: 'from-blue-50 to-blue-100', textColor: 'text-blue-600' },
+    { label: 'متوسط شهري', value: avgMonthly, color: 'from-green-50 to-green-100', textColor: 'text-green-600', sub: 'طلب في الشهر' },
+    { label: 'أعلى شهر', value: maxMonth ? maxMonth.count : 0, color: 'from-purple-50 to-purple-100', textColor: 'text-purple-600', sub: maxMonth ? maxMonth.month : '-' },
+    { label: 'تنبيهات', value: alertCount, color: alertCount > 0 ? 'from-red-50 to-red-100' : 'from-green-50 to-green-100', textColor: alertCount > 0 ? 'text-red-600' : 'text-green-600', sub: alertCount > 0 ? 'بحاجة اهتمام' : 'جميع الطلبات جيدة' },
+  ];
 
   return (
     <div className="bg-white/80 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-6 lg:p-8 border border-white/50">
+      {/* ✅ Header */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl md:text-2xl font-black text-gray-800 flex items-center gap-3">
           <i className="fas fa-chart-pie text-purple-500"></i>
@@ -130,82 +142,38 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
         </button>
       </div>
 
-      {/* البطاقات الإحصائية */}
+      {/* ✅ البطاقات الإحصائية - باستخدام حلقة */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mb-6">
-        <div className="dashboard-card rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-clipboard-list text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.total}</span>
+        {statCards.map((card) => (
+          <div key={card.label} className={`${card.color} rounded-2xl p-3 md:p-4 text-white shadow-xl transition-all duration-300 hover:scale-105`}>
+            <div className="flex items-center justify-between">
+              <i className={`fas ${card.icon} text-lg md:text-2xl opacity-80`}></i>
+              <span className="text-xl md:text-3xl font-black">{card.value}</span>
+            </div>
+            <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">{card.label}</p>
           </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">إجمالي</p>
-        </div>
-        <div className="dashboard-card-green rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-check-circle text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.completed}</span>
-          </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">منجز</p>
-        </div>
-        <div className="dashboard-card-yellow rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-spinner text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.inProgress}</span>
-          </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">قيد التنفيذ</p>
-        </div>
-        <div className="dashboard-card-red rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-clock text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.pending}</span>
-          </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">معلق</p>
-        </div>
-        <div className="dashboard-card-purple rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-times-circle text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.cancelled}</span>
-          </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">ملغي</p>
-        </div>
-        <div className="dashboard-card-orange rounded-2xl p-3 md:p-4 text-white shadow-xl">
-          <div className="flex items-center justify-between">
-            <i className="fas fa-exclamation-triangle text-lg md:text-2xl opacity-80"></i>
-            <span className="text-xl md:text-3xl font-black">{stats.delayed}</span>
-          </div>
-          <p className="text-xs md:text-sm font-semibold mt-1 opacity-90">متأخر</p>
-        </div>
+        ))}
       </div>
 
-      {/* إحصائيات إضافية */}
+      {/* ✅ إحصائيات إضافية - باستخدام حلقة */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-3 md:p-4 text-center">
-          <p className="text-xs text-gray-600">نسبة الإنجاز</p>
-          <p className="text-2xl md:text-3xl font-bold text-blue-600">{completionRate}%</p>
-          <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-full h-1.5 transition-all duration-1000" style={{ width: `${completionRate}%` }}></div>
+        {extraStats.map((stat, index) => (
+          <div key={index} className={`bg-gradient-to-br ${stat.color} rounded-2xl p-3 md:p-4 text-center`}>
+            <p className="text-xs text-gray-600">{stat.label}</p>
+            <p className={`text-2xl md:text-3xl font-bold ${stat.textColor}`}>{stat.value}</p>
+            {stat.sub && <p className="text-[10px] text-gray-500 mt-0.5">{stat.sub}</p>}
+            {stat.label === 'نسبة الإنجاز' && (
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
+                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-full h-1.5 transition-all duration-1000" style={{ width: `${completionRate}%` }}></div>
+              </div>
+            )}
           </div>
-        </div>
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-3 md:p-4 text-center">
-          <p className="text-xs text-gray-600">متوسط شهري</p>
-          <p className="text-2xl md:text-3xl font-bold text-green-600">{avgMonthly}</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">طلب في الشهر</p>
-        </div>
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-3 md:p-4 text-center">
-          <p className="text-xs text-gray-600">أعلى شهر</p>
-          <p className="text-2xl md:text-3xl font-bold text-purple-600">{maxMonth ? maxMonth.count : 0}</p>
-          <p className="text-[10px] text-gray-500 mt-0.5">{maxMonth ? maxMonth.month : '-'}</p>
-        </div>
-        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-3 md:p-4 text-center">
-          <p className="text-xs text-gray-600">تنبيهات</p>
-          <p className={`text-2xl md:text-3xl font-bold ${alertCount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {alertCount}
-          </p>
-          <p className="text-[10px] text-gray-500 mt-0.5">{alertCount > 0 ? 'بحاجة اهتمام' : 'جميع الطلبات جيدة'}</p>
-        </div>
+        ))}
       </div>
 
-      {/* الرسوم البيانية */}
+      {/* ✅ الرسوم البيانية */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* توزيع الطلبات حسب الحالة */}
         <div className="bg-gray-50 rounded-2xl p-4 md:p-6">
           <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm md:text-base">
             <i className="fas fa-chart-bar text-purple-500"></i>
@@ -245,6 +213,7 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
           </div>
         </div>
 
+        {/* أكثر الجهات طلباً */}
         <div className="bg-gray-50 rounded-2xl p-4 md:p-6">
           <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm md:text-base">
             <i className="fas fa-building text-purple-500"></i>
@@ -252,13 +221,7 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
           </h3>
           <div className="space-y-3">
             {stats.byRequester.map((item, index) => {
-              const colors = [
-                'from-yellow-400 to-yellow-500',
-                'from-gray-400 to-gray-500',
-                'from-orange-400 to-orange-500',
-                'from-purple-400 to-purple-500',
-                'from-pink-400 to-pink-500'
-              ];
+              const colors = ['from-yellow-400 to-yellow-500', 'from-gray-400 to-gray-500', 'from-orange-400 to-orange-500', 'from-purple-400 to-purple-500', 'from-pink-400 to-pink-500'];
               return (
                 <div key={index} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2.5 shadow-sm hover:shadow-md transition-all">
                   <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-r ${colors[index % colors.length]}`}>
@@ -273,14 +236,12 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
                 </div>
               );
             })}
-            {stats.byRequester.length === 0 && (
-              <p className="text-gray-500 text-center py-4">لا توجد بيانات</p>
-            )}
+            {stats.byRequester.length === 0 && <p className="text-gray-500 text-center py-4">لا توجد بيانات</p>}
           </div>
         </div>
       </div>
 
-      {/* الاتجاه الشهري */}
+      {/* ✅ الاتجاه الشهري */}
       <div className="mt-6 bg-gray-50 rounded-2xl p-4 md:p-6">
         <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm md:text-base">
           <i className="fas fa-chart-line text-purple-500"></i>
@@ -303,9 +264,7 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
               </div>
             );
           })}
-          {stats.monthlyTrend.length === 0 && (
-            <p className="text-gray-500 text-center py-8 w-full">لا توجد بيانات</p>
-          )}
+          {stats.monthlyTrend.length === 0 && <p className="text-gray-500 text-center py-8 w-full">لا توجد بيانات</p>}
         </div>
         {stats.monthlyTrend.length > 1 && (
           <div className="flex flex-wrap justify-between mt-3 text-[10px] md:text-xs text-gray-500 border-t pt-3">
@@ -315,7 +274,7 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
         )}
       </div>
 
-      {/* أزرار التصدير */}
+      {/* ✅ أزرار التصدير */}
       <div className="mt-6 flex flex-wrap gap-2 md:gap-3 justify-end border-t pt-4 md:pt-6 no-print">
         <button
           onClick={exportDashboardToExcel}

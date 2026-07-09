@@ -55,11 +55,75 @@ const Home: React.FC<Props> = ({
 
   const alertCount = (stats.overdue || 0) + (stats.expiringToday || 0);
 
+  // ✅ بطاقات الوصول السريع - بيانات موحدة
+  const quickCards = [
+    { 
+      id: 'dashboard',
+      icon: 'fa-chart-pie', 
+      title: 'التقارير', 
+      desc: 'عرض الإحصائيات',
+      color: 'from-blue-500 to-blue-600',
+      onClick: onOpenDashboard
+    },
+    { 
+      id: 'add',
+      icon: 'fa-plus-circle', 
+      title: 'طلب جديد', 
+      desc: 'إضافة طلب',
+      color: 'from-green-500 to-green-600',
+      onClick: onOpenAddForm
+    },
+    { 
+      id: 'alerts',
+      icon: 'fa-bell', 
+      title: 'تنبيهات', 
+      desc: alertCount > 0 ? `${alertCount} تنبيه` : 'لا توجد تنبيهات',
+      color: alertCount > 0 ? 'from-red-500 to-red-600' : 'from-gray-400 to-gray-500',
+      onClick: onOpenAlerts,
+      badge: alertCount > 0 ? alertCount : null
+    },
+    { 
+      id: 'export',
+      icon: 'fa-file-excel', 
+      title: 'تصدير', 
+      desc: 'تصدير البيانات',
+      color: 'from-orange-500 to-orange-600',
+      onClick: onExportExcel
+    }
+  ];
+
+  // ✅ إحصائيات سريعة - بيانات موحدة
+  const statsCards = [
+    { 
+      id: 'total',
+      icon: 'fa-clipboard-list', 
+      title: 'إجمالي الطلبات', 
+      value: stats.total,
+      color: 'bg-blue-100',
+      iconColor: 'text-blue-600'
+    },
+    { 
+      id: 'completed',
+      icon: 'fa-check-circle', 
+      title: 'الطلبات المنجزة', 
+      value: stats.completed,
+      color: 'bg-green-100',
+      iconColor: 'text-green-600'
+    },
+    { 
+      id: 'delayed',
+      icon: 'fa-clock', 
+      title: 'الطلبات المتأخرة', 
+      value: stats.delayed,
+      color: 'bg-orange-100',
+      iconColor: 'text-orange-600'
+    }
+  ];
+
   return (
     <div className="space-y-6">
-      {/* بطاقة الترحيب - مميزة */}
+      {/* ✅ بطاقة الترحيب - محسنة */}
       <div className="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-6 md:p-8 text-white shadow-2xl relative overflow-hidden">
-        {/* خلفية مزخرفة */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
         
@@ -82,7 +146,6 @@ const Home: React.FC<Props> = ({
             </div>
           </div>
           
-          {/* شريط التقدم */}
           <div className="mt-4">
             <div className="flex justify-between text-sm text-purple-200 mb-1">
               <span>التقدم في الطلبات</span>
@@ -98,100 +161,46 @@ const Home: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* بطاقات الوصول السريع - 4 بطاقات */}
+      {/* ✅ بطاقات الوصول السريع - باستخدام حلقة */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* بطاقة التقارير */}
-        <div 
-          onClick={onOpenDashboard}
-          className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 text-center"
-        >
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <i className="fas fa-chart-pie text-white text-xl"></i>
+        {quickCards.map((card) => (
+          <div 
+            key={card.id}
+            onClick={card.onClick}
+            className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 text-center relative"
+          >
+            {card.badge && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                {card.badge}
+              </span>
+            )}
+            <div className={`w-12 h-12 bg-gradient-to-br ${card.color} rounded-2xl flex items-center justify-center mx-auto mb-2`}>
+              <i className={`fas ${card.icon} text-white text-xl`}></i>
+            </div>
+            <p className="font-bold text-gray-800 text-sm">{card.title}</p>
+            <p className="text-gray-400 text-xs">{card.desc}</p>
           </div>
-          <p className="font-bold text-gray-800 text-sm">التقارير</p>
-          <p className="text-gray-400 text-xs">عرض الإحصائيات</p>
-        </div>
-
-        {/* بطاقة طلب جديد */}
-        <div 
-          onClick={onOpenAddForm}
-          className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 text-center"
-        >
-          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <i className="fas fa-plus-circle text-white text-xl"></i>
-          </div>
-          <p className="font-bold text-gray-800 text-sm">طلب جديد</p>
-          <p className="text-gray-400 text-xs">إضافة طلب</p>
-        </div>
-
-        {/* بطاقة التنبيهات */}
-        <div 
-          onClick={onOpenAlerts}
-          className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 text-center relative"
-        >
-          {alertCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-              {alertCount}
-            </span>
-          )}
-          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-2 ${
-            alertCount > 0 ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-gray-400 to-gray-500'
-          }`}>
-            <i className="fas fa-bell text-white text-xl"></i>
-          </div>
-          <p className="font-bold text-gray-800 text-sm">تنبيهات</p>
-          <p className="text-gray-400 text-xs">{alertCount > 0 ? `${alertCount} تنبيه` : 'لا توجد تنبيهات'}</p>
-        </div>
-
-        {/* بطاقة تصدير */}
-        <div 
-          onClick={onExportExcel}
-          className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 cursor-pointer hover:shadow-xl hover:scale-105 transition-all duration-300 text-center"
-        >
-          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-2">
-            <i className="fas fa-file-excel text-white text-xl"></i>
-          </div>
-          <p className="font-bold text-gray-800 text-sm">تصدير</p>
-          <p className="text-gray-400 text-xs">تصدير البيانات</p>
-        </div>
+        ))}
       </div>
 
-      {/* بطاقات إحصائيات سريعة - 3 بطاقات */}
+      {/* ✅ إحصائيات سريعة - باستخدام حلقة */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 flex items-center gap-4">
-          <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-            <i className="fas fa-clipboard-list text-blue-600 text-2xl"></i>
+        {statsCards.map((card) => (
+          <div key={card.id} className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 flex items-center gap-4">
+            <div className={`w-14 h-14 ${card.color} rounded-2xl flex items-center justify-center flex-shrink-0`}>
+              <i className={`fas ${card.icon} ${card.iconColor} text-2xl`}></i>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs">{card.title}</p>
+              <p className="text-2xl font-bold text-gray-800">{card.value}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-gray-400 text-xs">إجمالي الطلبات</p>
-            <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 flex items-center gap-4">
-          <div className="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-            <i className="fas fa-check-circle text-green-600 text-2xl"></i>
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs">الطلبات المنجزة</p>
-            <p className="text-2xl font-bold text-gray-800">{stats.completed}</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 flex items-center gap-4">
-          <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center flex-shrink-0">
-            <i className="fas fa-clock text-orange-600 text-2xl"></i>
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs">الطلبات المتأخرة</p>
-            <p className="text-2xl font-bold text-orange-600">{stats.delayed}</p>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* توزيع بسيط للحالات - شريط */}
+      {/* ✅ توزيع الطلبات - مبسط وجميل */}
       <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
-        <p className="text-sm font-bold text-gray-700 mb-3">توزيع الطلبات</p>
+        <p className="text-sm font-bold text-gray-700 mb-3">📊 توزيع الطلبات</p>
         <div className="flex h-4 rounded-full overflow-hidden">
           {stats.byStatus.map((item) => {
             const percentage = stats.total > 0 ? (item.count / stats.total) * 100 : 0;
@@ -207,7 +216,7 @@ const Home: React.FC<Props> = ({
                 className={`${colors[item.status] || 'bg-gray-400'} transition-all duration-1000`}
                 style={{ width: `${percentage}%` }}
                 title={`${item.status}: ${item.count}`}
-              ></div>
+              />
             );
           })}
         </div>
