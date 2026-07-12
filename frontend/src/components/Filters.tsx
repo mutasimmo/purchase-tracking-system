@@ -32,7 +32,7 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
-    // ✅ إصلاح: إزالة التحقق status !== ''
+    // ✅ فقط if (status)
     if (status) {
       filters.status = status;
     }
@@ -54,7 +54,7 @@ const Filters: React.FC<Props> = ({
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
-    // ✅ إصلاح: إزالة التحقق status !== ''
+    // ✅ فقط if (status)
     if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
