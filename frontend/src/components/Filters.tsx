@@ -16,16 +16,16 @@ const Filters: React.FC<Props> = ({
   initialFilters 
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
-  // ✅ إصلاح: استخدام النوع الصحيح مع كل الحالات الممكنة
-  const [status, setStatus] = useState<PurchaseStatus | 'all' | ''>(initialFilters?.status || '');
+  // ✅ إصلاح نهائي: التحقق من القيمة
+  const [status, setStatus] = useState<PurchaseStatus | ''>(
+    initialFilters?.status && initialFilters.status !== 'all' 
+      ? initialFilters.status as PurchaseStatus 
+      : ''
+  );
   const [startDate, setStartDate] = useState(initialFilters?.startDate || '');
   const [endDate, setEndDate] = useState(initialFilters?.endDate || '');
   
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ============================================
-  // ✅ تطبيق الفلاتر مع Debounce
-  // ============================================
 
   useEffect(() => {
     if (searchTimeoutRef.current) {
@@ -33,8 +33,7 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
-    // ✅ إصلاح: التحقق من status بشكل صحيح
-    if (status && status !== 'all' && status !== '') {
+    if (status) {
       filters.status = status;
     }
     if (startDate) filters.startDate = startDate;
@@ -52,16 +51,10 @@ const Filters: React.FC<Props> = ({
     };
   }, [status, startDate, endDate, searchTerm, onFilterChange]);
 
-  // ============================================
-  // ✅ دوال المعالجة
-  // ============================================
-
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
-    if (status && status !== 'all' && status !== '') {
-      filters.status = status;
-    }
+    if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (searchTerm) filters.search = searchTerm;
@@ -91,16 +84,8 @@ const Filters: React.FC<Props> = ({
     }
   }, [handleSearch]);
 
-  // ============================================
-  // ✅ المتغيرات
-  // ============================================
-
   const statusOptions: (PurchaseStatus | '')[] = ['', 'قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
   const activeFiltersCount = [searchTerm, status, startDate, endDate].filter(Boolean).length;
-
-  // ============================================
-  // ✅ Render
-  // ============================================
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-3 md:p-4 mb-6">
@@ -203,7 +188,7 @@ const Filters: React.FC<Props> = ({
                 بحث: {searchTerm}
               </span>
             )}
-            {status && status !== 'all' && (
+            {status && (
               <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 md:py-1 rounded-full">
                 {status}
               </span>
