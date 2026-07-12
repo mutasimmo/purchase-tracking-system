@@ -48,26 +48,33 @@ const io = new Server(httpServer, {
 setupSocketHandlers(io);
 
 // ============================================
-// 🌐 CORS Configuration
+// 🌐 CORS Configuration - ✅ مع إضافة Vercel
 // ============================================
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  // ✅ إضافة روابط Vercel
+  'https://purchase-tracking-system-fonf.vercel.app',
+  'https://purchase-tracking-system-fonf-git-main-mutasimmos-projects.vercel.app',
+  'https://purchase-tracking-system.vercel.app'
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow in development
+    // ✅ السماح في التطوير
     if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
     
+    // ✅ السماح للطلبات بدون Origin (مثل Postman)
     if (!origin) return callback(null, true);
+    
+    // ✅ التحقق من السماح
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      logger.warn('CORS blocked origin:', origin);
+      logger.warn('❌ CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
