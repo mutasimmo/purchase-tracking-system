@@ -16,7 +16,6 @@ const Filters: React.FC<Props> = ({
   initialFilters 
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
-  // ✅ إصلاح نهائي: التحقق من القيمة
   const [status, setStatus] = useState<PurchaseStatus | ''>(
     initialFilters?.status && initialFilters.status !== 'all' 
       ? initialFilters.status as PurchaseStatus 
@@ -33,6 +32,7 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
+    // ✅ إصلاح: إزالة التحقق status !== ''
     if (status) {
       filters.status = status;
     }
@@ -54,6 +54,7 @@ const Filters: React.FC<Props> = ({
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
+    // ✅ إصلاح: إزالة التحقق status !== ''
     if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
