@@ -8,24 +8,31 @@ import logger from '../config/logger.js';
 // Socket Authentication
 // ============================================
 
+
 export const socketAuth = (socket: Socket, next: (err?: Error) => void) => {
   try {
+    // ✅ إضافة للتصحيح
+    console.log('🔑 Socket handshake auth:', socket.handshake.auth);
+    
     const token = socket.handshake.auth.token;
+    console.log('🔑 Token received:', token ? 'Yes (length: ' + token.length + ')' : 'No');
     
     if (!token) {
       return next(new Error('Authentication required'));
     }
 
     const verification = verifyToken(token);
+    console.log('✅ Verification result:', verification);
+    
     if (!verification.valid) {
       return next(new Error(verification.error || 'Invalid token'));
     }
 
+    console.log('✅ User authenticated:', verification.data.username);
     socket.data.user = verification.data;
     next();
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Socket authentication error:', errorMessage);
+    console.error('❌ Socket auth error:', error);
     next(new Error('Authentication failed'));
   }
 };
