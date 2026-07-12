@@ -27,7 +27,8 @@ const router = Router();
 router.post('/login', authRateLimiter, login);
 router.post('/register', registerRateLimiter, register);
 router.post('/refresh-token', refreshToken);
-router.post('/logout', authenticate, logout);
+// ✅ Logout - لا يحتاج إلى توكن
+router.post('/logout', logout);
 
 // ============================================
 // Protected Routes (for regular users)
