@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// src/components/UserManagement.tsx
+import { useState, useEffect, useMemo } from 'react';
 import { authApi } from '../api/authApi';
 import toast from 'react-hot-toast';
 
@@ -23,6 +24,13 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; userId: number | null }>({
+    show: false,
+    userId: null
+  });
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -31,6 +39,12 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     role: 'user',
     is_active: true
   });
+
+  const usersPerPage = 10;
+
+  // ============================================
+  // ✅ جلب المستخدمين
+  // ============================================
 
   useEffect(() => {
     loadUsers();
@@ -42,12 +56,58 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
       const data = await authApi.getAllUsers();
       setUsers(data);
     } catch (error) {
-      toast.error('❌ حدث خطأ في تحميل المستخدمين');
-      console.error(error);
+      handleApiError(error, 'حدث خطأ في تحميل المستخدمين');
     } finally {
       setLoading(false);
     }
   };
+
+  // ============================================
+  // ✅ معالجة الأخطاء
+  // ============================================
+
+  const handleApiError = (error: any, defaultMessage: string) => {
+    const errorMessage = error.response?.data?.error || 
+                         error.response?.data?.message || 
+                         error.message || 
+                         defaultMessage;
+    
+    if (error.response?.status === 403) {
+      toast.error('❌ ليس لديك صلاحية للقيام بهذا الإجراء');
+      return;
+    }
+    
+    if (error.response?.status === 401) {
+      toast.error('❌ انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+      return;
+    }
+    
+    toast.error(`❌ ${errorMessage}`);
+  };
+
+  // ============================================
+  // ✅ الفلترة والترقيم
+  // ============================================
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const matchesSearch = user.username.includes(searchTerm) || 
+                            user.full_name.includes(searchTerm) ||
+                            (user.email && user.email.includes(searchTerm));
+      const matchesRole = filterRole ? user.role === filterRole : true;
+      return matchesSearch && matchesRole;
+    });
+  }, [users, searchTerm, filterRole]);
+
+  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+  const currentUsers = filteredUsers.slice(
+    (currentPage - 1) * usersPerPage,
+    currentPage * usersPerPage
+  );
+
+  // ============================================
+  // ✅ دوال النموذج
+  // ============================================
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
@@ -57,8 +117,30 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     });
   };
 
+  const validateForm = () => {
+    if (!editingUser && !formData.password) {
+      toast.error('❌ كلمة المرور مطلوبة');
+      return false;
+    }
+    if (formData.password && formData.password.length < 6) {
+      toast.error('❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+      return false;
+    }
+    if (!formData.username.trim()) {
+      toast.error('❌ اسم المستخدم مطلوب');
+      return false;
+    }
+    if (!formData.full_name.trim()) {
+      toast.error('❌ الاسم الكامل مطلوب');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
+    
     try {
       setFormLoading(true);
       if (editingUser) {
@@ -70,21 +152,29 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
       }
       setShowForm(false);
       setEditingUser(null);
-      setFormData({
-        username: '',
-        password: '',
-        full_name: '',
-        email: '',
-        role: 'user',
-        is_active: true
-      });
+      resetForm();
       await loadUsers();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || '❌ حدث خطأ في حفظ المستخدم');
+      handleApiError(error, 'حدث خطأ في حفظ المستخدم');
     } finally {
       setFormLoading(false);
     }
   };
+
+  const resetForm = () => {
+    setFormData({
+      username: '',
+      password: '',
+      full_name: '',
+      email: '',
+      role: 'user',
+      is_active: true
+    });
+  };
+
+  // ============================================
+  // ✅ دوال الإجراءات
+  // ============================================
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -99,14 +189,20 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذا المستخدم؟')) return;
+  const handleDelete = (id: number) => {
+    setDeleteConfirm({ show: true, userId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.userId) return;
     try {
-      await authApi.deleteUser(id);
+      await authApi.deleteUser(deleteConfirm.userId);
       toast.success('🗑️ تم حذف المستخدم بنجاح');
       await loadUsers();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || '❌ حدث خطأ في حذف المستخدم');
+      handleApiError(error, 'حدث خطأ في حذف المستخدم');
+    } finally {
+      setDeleteConfirm({ show: false, userId: null });
     }
   };
 
@@ -117,9 +213,13 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
       toast.success(`✅ تم ${newStatus ? 'تفعيل' : 'تعطيل'} المستخدم بنجاح`);
       await loadUsers();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || '❌ حدث خطأ في تغيير حالة المستخدم');
+      handleApiError(error, 'حدث خطأ في تغيير حالة المستخدم');
     }
   };
+
+  // ============================================
+  // ✅ دوال العرض
+  // ============================================
 
   const getRoleBadge = (role: string) => {
     const styles: Record<string, string> = {
@@ -139,6 +239,10 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     return labels[role] || role;
   };
 
+  // ============================================
+  // ✅ Render
+  // ============================================
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -150,38 +254,55 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
   return (
     <div className="bg-white rounded-3xl shadow-2xl p-6 max-w-5xl w-full max-h-[90vh] flex flex-col">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
             <i className="fas fa-users text-purple-500 text-2xl"></i>
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-800">إدارة المستخدمين</h2>
-            <p className="text-sm text-gray-500">{users.length} مستخدم</p>
+            <p className="text-sm text-gray-500">{filteredUsers.length} مستخدم</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          {/* بحث */}
+          <div className="relative flex-1 sm:flex-none">
+            <input
+              type="text"
+              placeholder="بحث..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full sm:w-48 border border-gray-300 rounded-xl px-4 py-2 pr-10 focus:ring-2 focus:ring-purple-500 text-sm"
+            />
+            <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+          </div>
+          
+          {/* فلتر الدور */}
+          <select
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            className="border border-gray-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-purple-500 text-sm"
+          >
+            <option value="">جميع الأدوار</option>
+            <option value="admin">مدير</option>
+            <option value="user">مستخدم</option>
+            <option value="viewer">مشاهد</option>
+          </select>
+          
           <button
             onClick={() => {
               setEditingUser(null);
-              setFormData({
-                username: '',
-                password: '',
-                full_name: '',
-                email: '',
-                role: 'user',
-                is_active: true
-              });
+              resetForm();
               setShowForm(true);
             }}
-            className="px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center gap-2 text-sm"
           >
             <i className="fas fa-plus-circle"></i>
             إضافة مستخدم
           </button>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-gray-400 hover:text-gray-600 transition-colors px-2"
           >
             <i className="fas fa-times text-xl"></i>
           </button>
@@ -203,9 +324,11 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
             </tr>
           </thead>
           <tbody>
-            {users.map((user, index) => (
+            {currentUsers.map((user, index) => (
               <tr key={user.id} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 text-sm text-gray-500">{index + 1}</td>
+                <td className="px-4 py-3 text-sm text-gray-500">
+                  {(currentPage - 1) * usersPerPage + index + 1}
+                </td>
                 <td className="px-4 py-3 text-sm font-medium">{user.username}</td>
                 <td className="px-4 py-3 text-sm">{user.full_name}</td>
                 <td className="px-4 py-3 text-sm">{user.email || '-'}</td>
@@ -252,9 +375,66 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
             ))}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center gap-2 mt-4">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 border rounded-lg disabled:opacity-50"
+            >
+              السابق
+            </button>
+            <span className="px-3 py-1">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 border rounded-lg disabled:opacity-50"
+            >
+              التالي
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Form Modal */}
+      {/* ============================================
+          Delete Confirmation Modal
+          ============================================ */}
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i className="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">تأكيد الحذف</h3>
+            <p className="text-gray-600 mb-6">
+              هل أنت متأكد من حذف هذا المستخدم؟<br />
+              <span className="text-sm text-red-500">لا يمكن التراجع عن هذا الإجراء</span>
+            </p>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => setDeleteConfirm({ show: false, userId: null })}
+                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-6 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
+              >
+                حذف
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          Form Modal
+          ============================================ */}
       {showForm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl max-w-lg w-full p-8 shadow-2xl max-h-[90vh] overflow-y-auto">

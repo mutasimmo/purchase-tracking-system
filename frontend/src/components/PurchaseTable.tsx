@@ -1,14 +1,14 @@
-import { useRef } from 'react';
+// src/components/PurchaseTable.tsx
+import { useRef, useCallback, useMemo } from 'react';
 import type { Purchase } from '../types/purchase.types';
+import * as XLSX from 'xlsx';
+import toast from 'react-hot-toast';
 
-interface Props {
-  purchases: Purchase[];
-  onEdit: (purchase: Purchase) => void;
-  onDelete: (id: number) => void;
-  loading?: boolean;
-}
+// ============================================
+// ✅ دوال مساعدة
+// ============================================
 
-const getStatusClass = (status: string) => {
+const getStatusClass = (status: string): string => {
   const statusMap: Record<string, string> = {
     'منجز': 'status-completed',
     'قيد التنفيذ': 'status-inprogress',
@@ -18,7 +18,7 @@ const getStatusClass = (status: string) => {
   return statusMap[status] || 'status-pending';
 };
 
-const getStatusIcon = (status: string) => {
+const getStatusIcon = (status: string): string => {
   const iconMap: Record<string, string> = {
     'منجز': 'fa-check-circle',
     'قيد التنفيذ': 'fa-spinner fa-pulse',
@@ -28,7 +28,7 @@ const getStatusIcon = (status: string) => {
   return iconMap[status] || 'fa-circle';
 };
 
-const isOverdue = (purchase: Purchase) => {
+const isOverdue = (purchase: Purchase): boolean => {
   if (purchase.status === 'منجز' || purchase.status === 'ملغي') return false;
   const deliveryDate = new Date(purchase.delivery_date);
   const today = new Date();
@@ -36,7 +36,7 @@ const isOverdue = (purchase: Purchase) => {
   return diffDays >= 2;
 };
 
-const getAlertClass = (purchase: Purchase) => {
+const getAlertClass = (purchase: Purchase): string => {
   if (purchase.status === 'منجز' || purchase.status === 'ملغي') return '';
   const deliveryDate = new Date(purchase.delivery_date);
   const today = new Date();
@@ -47,12 +47,135 @@ const getAlertClass = (purchase: Purchase) => {
   return '';
 };
 
-const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }) => {
+const getDaysRemaining = (purchase: Purchase): number => {
+  if (purchase.status === 'منجز' || purchase.status === 'ملغي') return 0;
+  const deliveryDate = new Date(purchase.delivery_date);
+  const today = new Date();
+  return Math.ceil((deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+// ============================================
+// ✅ المكون الرئيسي
+// ============================================
+
+interface Props {
+  purchases: Purchase[];
+  onEdit: (purchase: Purchase) => void;
+  onDelete: (id: number) => void;
+  onStatusChange?: (id: number, status: string) => void;
+  loading?: boolean;
+}
+
+const PurchaseTable: React.FC<Props> = ({ 
+  purchases, 
+  onEdit, 
+  onDelete, 
+  onStatusChange,
+  loading 
+}) => {
   const printRef = useRef<HTMLDivElement>(null);
 
-  // دالة طباعة تقرير طلبات المشتريات (عرضي)
-  const handlePrintReport = () => {
-    // بناء HTML كامل للتقرير (عرضي)
+  // ============================================
+  // ✅ إحصائيات محسوبة
+  // ============================================
+
+  const overdueCount = useMemo(() => {
+    return purchases.filter(p => isOverdue(p)).length;
+  }, [purchases]);
+
+  const statusCounts = useMemo(() => {
+    return purchases.reduce((acc, p) => {
+      acc[p.status] = (acc[p.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [purchases]);
+
+  // ============================================
+  // ✅ عرض حالة الطلب مع قائمة منسدلة
+  // ============================================
+
+  const renderStatus = (purchase: Purchase) => {
+    if (onStatusChange) {
+      return (
+        <select
+          value={purchase.status}
+          onChange={(e) => onStatusChange(purchase.id!, e.target.value)}
+          className="border rounded-lg px-2 py-1 text-xs md:text-sm focus:ring-2 focus:ring-purple-500"
+        >
+          <option value="قيد التنفيذ">قيد التنفيذ</option>
+          <option value="منجز">منجز</option>
+          <option value="معلق">معلق</option>
+          <option value="ملغي">ملغي</option>
+        </select>
+      );
+    }
+    
+    return (
+      <span className={`status-badge ${getStatusClass(purchase.status)} text-xs md:text-sm`}>
+        <i className={`fas ${getStatusIcon(purchase.status)}`}></i>
+        <span className="hidden sm:inline">{purchase.status}</span>
+        <span className="sm:hidden">
+          {purchase.status === 'قيد التنفيذ' ? 'تنفيذ' :
+           purchase.status === 'منجز' ? 'منجز' :
+           purchase.status === 'معلق' ? 'معلق' :
+           'ملغي'}
+        </span>
+      </span>
+    );
+  };
+
+  // ============================================
+  // ✅ تصدير إلى Excel
+  // ============================================
+
+  const exportToExcel = useCallback(() => {
+    try {
+      if (purchases.length === 0) {
+        toast.error('❌ لا توجد بيانات للتصدير');
+        return;
+      }
+
+      const data = purchases.map(p => ({
+        'رقم الطلب': p.request_number,
+        'التاريخ': new Date(p.date).toLocaleDateString('ar-SA'),
+        'الجهة الطالبة': p.requester,
+        'وصف الطلب': p.description,
+        'المستلم': p.receiver,
+        'تاريخ التسليم': new Date(p.delivery_date).toLocaleDateString('ar-SA'),
+        'المتبقي (أيام)': getDaysRemaining(p),
+        'ملحوظات': p.notes || '',
+        'موقف التنفيذ': p.status
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'طلبات المشتريات');
+      
+      ws['!cols'] = [
+        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 30 },
+        { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 25 },
+        { wch: 15 }
+      ];
+
+      const fileName = `تقرير_المشتريات_${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      toast.success('📊 تم تصدير الملف بنجاح');
+    } catch (error) {
+      toast.error('❌ حدث خطأ في تصدير الملف');
+      console.error(error);
+    }
+  }, [purchases]);
+
+  // ============================================
+  // ✅ طباعة التقرير
+  // ============================================
+
+  const handlePrintReport = useCallback(() => {
+    if (purchases.length === 0) {
+      toast.error('❌ لا توجد بيانات للطباعة');
+      return;
+    }
+
     const printHTML = `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
@@ -62,7 +185,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
         <title>تقرير طلبات المشتريات</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>
-          /* تنسيقات التقرير */
           * {
             margin: 0;
             padding: 0;
@@ -76,13 +198,11 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             direction: rtl;
           }
 
-          /* تنسيق الصفحة - عرضي */
           @page {
             size: A4 landscape;
             margin: 10mm 8mm 10mm 8mm;
           }
 
-          /* عنوان التقرير */
           .report-header {
             text-align: center;
             margin-bottom: 15px;
@@ -116,7 +236,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             font-weight: 600;
           }
 
-          /* الجدول - عرضي */
           .report-table {
             width: 100%;
             border-collapse: collapse;
@@ -160,47 +279,16 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             background-color: #f0f0f0;
           }
 
-          /* أعمدة محددة */
-          .col-number {
-            width: 30px;
-            min-width: 30px;
-          }
-          .col-request {
-            width: 70px;
-            min-width: 70px;
-          }
-          .col-date {
-            width: 75px;
-            min-width: 75px;
-          }
-          .col-requester {
-            width: 110px;
-            min-width: 110px;
-          }
-          .col-description {
-            width: 150px;
-            min-width: 100px;
-            max-width: 180px;
-          }
-          .col-receiver {
-            width: 100px;
-            min-width: 100px;
-          }
-          .col-delivery {
-            width: 75px;
-            min-width: 75px;
-          }
-          .col-notes {
-            width: 100px;
-            min-width: 80px;
-            max-width: 140px;
-          }
-          .col-status {
-            width: 85px;
-            min-width: 85px;
-          }
+          .col-number { width: 30px; min-width: 30px; }
+          .col-request { width: 70px; min-width: 70px; }
+          .col-date { width: 75px; min-width: 75px; }
+          .col-requester { width: 110px; min-width: 110px; }
+          .col-description { width: 150px; min-width: 100px; max-width: 180px; }
+          .col-receiver { width: 100px; min-width: 100px; }
+          .col-delivery { width: 75px; min-width: 75px; }
+          .col-notes { width: 100px; min-width: 80px; max-width: 140px; }
+          .col-status { width: 85px; min-width: 85px; }
 
-          /* شارات الحالة */
           .report-status {
             padding: 3px 10px;
             border-radius: 4px;
@@ -234,7 +322,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             border: 1px solid #d6d8db;
           }
 
-          /* نص المتأخر */
           .overdue-text {
             color: #dc3545;
             font-weight: 700;
@@ -250,7 +337,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             display: inline-block;
           }
 
-          /* تذييل التقرير */
           .report-footer {
             text-align: center;
             font-size: 10px;
@@ -260,7 +346,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             border-top: 1px solid #eee;
           }
 
-          /* للطباعة */
           @media print {
             body {
               padding: 8px !important;
@@ -292,7 +377,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
             }
           }
 
-          /* للشاشات الصغيرة */
           @media screen and (max-width: 1024px) {
             .report-table {
               font-size: 10px !important;
@@ -309,7 +393,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
         </style>
       </head>
       <body>
-        <!-- رأس التقرير -->
         <div class="report-header">
           <h1>📋 تقرير طلبات المشتريات</h1>
           <div class="subtitle">نظام متابعة المشتريات</div>
@@ -323,7 +406,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
           <div class="total-info">📊 إجمالي الطلبات: <span style="color: #667eea; font-size: 16px;">${purchases.length}</span></div>
         </div>
 
-        <!-- الجدول -->
         <table class="report-table">
           <thead>
             <tr>
@@ -374,7 +456,6 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
           </tbody>
         </table>
 
-        <!-- تذييل التقرير -->
         <div class="report-footer">
           تم إنشاء هذا التقرير بواسطة نظام متابعة المشتريات | جميع الحقوق محفوظة © ${new Date().getFullYear()}
         </div>
@@ -390,16 +471,19 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
       </html>
     `;
 
-    // فتح نافذة جديدة للطباعة
     const printWindow = window.open('', '_blank', 'width=1100,height=700');
     if (!printWindow) {
-      alert('يرجى السماح للنوافذ المنبثقة لتتمكن من الطباعة');
+      toast.error('❌ يرجى السماح للنوافذ المنبثقة لتتمكن من الطباعة');
       return;
     }
 
     printWindow.document.write(printHTML);
     printWindow.document.close();
-  };
+  }, [purchases]);
+
+  // ============================================
+  // ✅ حالة التحميل
+  // ============================================
 
   if (loading) {
     return (
@@ -412,6 +496,10 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
     );
   }
 
+  // ============================================
+  // ✅ لا توجد بيانات
+  // ============================================
+
   if (purchases.length === 0) {
     return (
       <div className="text-center py-16">
@@ -422,18 +510,46 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
     );
   }
 
+  // ============================================
+  // ✅ العرض الرئيسي
+  // ============================================
+
   return (
     <div>
-      {/* زر طباعة التقرير */}
-      <div className="flex justify-end mb-4 no-print">
-        <button
-          onClick={handlePrintReport}
-          className="px-4 py-2 md:px-6 md:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm md:text-base"
-        >
-          <i className="fas fa-print"></i>
-          <span className="hidden sm:inline">طباعة تقرير طلبات المشتريات</span>
-          <span className="sm:hidden">🖨️ طباعة التقرير</span>
-        </button>
+      {/* ملخص وأزرار */}
+      <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+        <div className="flex flex-wrap gap-3 p-3 bg-gray-50 rounded-xl">
+          <span className="text-sm text-gray-600">
+            📊 إجمالي: <strong>{purchases.length}</strong>
+          </span>
+          {Object.entries(statusCounts).map(([status, count]) => (
+            <span key={status} className="text-sm text-gray-600">
+              {status}: <strong>{count}</strong>
+            </span>
+          ))}
+          {overdueCount > 0 && (
+            <span className="text-sm text-red-600">
+              ⚠️ متأخر: <strong>{overdueCount}</strong>
+            </span>
+          )}
+        </div>
+        
+        <div className="flex gap-2 no-print">
+          <button
+            onClick={handlePrintReport}
+            className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
+          >
+            <i className="fas fa-print"></i>
+            <span className="hidden sm:inline">طباعة</span>
+          </button>
+          <button
+            onClick={exportToExcel}
+            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 text-sm"
+          >
+            <i className="fas fa-file-excel"></i>
+            <span className="hidden sm:inline">تصدير Excel</span>
+          </button>
+        </div>
       </div>
 
       {/* الجدول */}
@@ -480,16 +596,8 @@ const PurchaseTable: React.FC<Props> = ({ purchases, onEdit, onDelete, loading }
                       <i className="fas fa-exclamation-triangle"></i>
                     </span>
                   )}
-                  <span className={`status-badge ${getStatusClass(purchase.status)} text-xs md:text-sm`}>
-                    <i className={`fas ${getStatusIcon(purchase.status)}`}></i>
-                    <span className="hidden sm:inline">{purchase.status}</span>
-                    <span className="sm:hidden">
-                      {purchase.status === 'قيد التنفيذ' ? 'تنفيذ' :
-                       purchase.status === 'منجز' ? 'منجز' :
-                       purchase.status === 'معلق' ? 'معلق' :
-                       'ملغي'}
-                    </span>
-                  </span>
+                  {/* ✅ قائمة منسدلة لتغيير الحالة */}
+                  {renderStatus(purchase)}
                 </td>
                 <td className="no-print">
                   <div className="flex justify-center gap-1 md:gap-2">

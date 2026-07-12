@@ -1,12 +1,15 @@
-import { useState, useEffect, useRef } from 'react';
+// src/components/Chat.tsx
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import toast from 'react-hot-toast';
 
 interface Message {
   user: string;
   text: string;
   time: string;
   isSystem?: boolean;
+  userId?: number;
 }
 
 interface Props {
@@ -20,51 +23,70 @@ const Chat: React.FC<Props> = ({ onClose }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const ROOM = 'general';
+  const MAX_RETRY_ATTEMPTS = 5;
+
+  // ✅ استخدام متغير بيئي أو localhost للتطوير
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+
+  // ============================================
+  // ✅ اتصال Socket.IO
+  // ============================================
 
   useEffect(() => {
-    // ✅ استخدام الرابط الصحيح
-    const socketUrl = 'https://purchase-backend-lmsm.onrender.com';
-    console.log('🔌 Connecting to socket:', socketUrl);
+    console.log('🔌 Connecting to socket:', SOCKET_URL);
     
-    const newSocket = io(socketUrl, {
+    const newSocket = io(SOCKET_URL, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionAttempts: MAX_RETRY_ATTEMPTS,
+      reconnectionDelay: 1000,
+      auth: {
+        token: localStorage.getItem('token') || ''
+      }
     });
 
     setSocket(newSocket);
 
+    // ✅ معالج الاتصال
     newSocket.on('connect', () => {
       console.log('✅ Connected to chat server');
       console.log('🆔 Socket ID:', newSocket.id);
       setIsConnected(true);
+      setReconnectAttempts(0);
       
       // تسجيل المستخدم
       if (user) {
-        newSocket.emit('register-user', user.full_name || user.username);
+        const displayName = user.full_name || user.username;
+        newSocket.emit('register-user', displayName);
+        console.log('👤 User registered:', displayName);
       }
       
+      // الانضمام إلى الغرفة
       newSocket.emit('join-room', ROOM);
       
-      setMessages(prev => [...prev, {
+      // ✅ رسالة ترحيب
+      const welcomeMessage: Message = {
         user: 'system',
         text: '🔗 تم الاتصال بالدردشة',
         time: new Date().toISOString(),
         isSystem: true
-      }]);
+      };
+      setMessages(prev => [...prev, welcomeMessage]);
     });
 
+    // ✅ استقبال الرسائل
     newSocket.on('message', (message: Message) => {
       console.log('📩 New message:', message);
       setMessages(prev => [...prev, message]);
     });
 
+    // ✅ مؤشر الكتابة
     newSocket.on('typing', (data: { user: string; isTyping: boolean }) => {
       setTypingUsers(prev => {
         if (data.isTyping) {
@@ -78,32 +100,62 @@ const Chat: React.FC<Props> = ({ onClose }) => {
       });
     });
 
+    // ✅ قائمة المستخدمين المتصلين
+    newSocket.on('online-users', (users: string[]) => {
+      console.log('👥 Online users:', users);
+    });
+
+    // ✅ معالج قطع الاتصال
     newSocket.on('disconnect', () => {
       console.log('❌ Disconnected from chat server');
       setIsConnected(false);
     });
 
+    // ✅ معالج أخطاء الاتصال
     newSocket.on('connect_error', (error) => {
       console.error('❌ Connection error:', error);
       setIsConnected(false);
+      setReconnectAttempts(prev => prev + 1);
+      
+      if (reconnectAttempts >= MAX_RETRY_ATTEMPTS) {
+        toast.error('❌ فشل الاتصال بالدردشة، يرجى المحاولة لاحقاً');
+      }
     });
 
+    // ✅ معالج الأخطاء العامة
+    newSocket.on('error', (error) => {
+      console.error('❌ Socket error:', error);
+      toast.error('❌ حدث خطأ في الدردشة');
+    });
+
+    // ✅ تنظيف عند الخروج
     return () => {
-      newSocket.emit('leave-room', ROOM);
+      if (newSocket.connected) {
+        newSocket.emit('leave-room', ROOM);
+      }
       newSocket.disconnect();
     };
-  }, [user]);
+  }, [user, SOCKET_URL, reconnectAttempts]);
+
+  // ============================================
+  // ✅ التمرير إلى آخر رسالة
+  // ============================================
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = () => {
+  // ============================================
+  // ✅ دوال الإرسال
+  // ============================================
+
+  const sendMessage = useCallback(() => {
     if (!inputMessage.trim() || !socket || !user || !isConnected) return;
 
+    const displayName = user.full_name || user.username;
     const messageData = {
       room: ROOM,
-      user: user.full_name || user.username,
+      user: displayName,
       text: inputMessage.trim()
     };
 
@@ -111,28 +163,53 @@ const Chat: React.FC<Props> = ({ onClose }) => {
     socket.emit('send-message', messageData);
     setInputMessage('');
     
+    // ✅ إيقاف مؤشر الكتابة
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
     }
-    socket.emit('typing', { room: ROOM, user: user.full_name || user.username, isTyping: false });
-  };
+    socket.emit('typing', { room: ROOM, user: displayName, isTyping: false });
+  }, [inputMessage, socket, user, isConnected]);
 
-  const handleTyping = () => {
+  // ============================================
+  // ✅ معالج الكتابة
+  // ============================================
+
+  const handleTyping = useCallback(() => {
     if (!socket || !user || !isConnected) return;
 
+    const displayName = user.full_name || user.username;
+
+    // ✅ بدء الكتابة
     if (!typingTimeoutRef.current) {
-      socket.emit('typing', { room: ROOM, user: user.full_name || user.username, isTyping: true });
+      socket.emit('typing', { room: ROOM, user: displayName, isTyping: true });
     }
 
+    // ✅ إعادة تعيين المؤقت
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
     typingTimeoutRef.current = setTimeout(() => {
       typingTimeoutRef.current = null;
-      socket.emit('typing', { room: ROOM, user: user.full_name || user.username, isTyping: false });
+      socket.emit('typing', { room: ROOM, user: displayName, isTyping: false });
     }, 2000);
-  };
+  }, [socket, user, isConnected]);
+
+  // ============================================
+  // ✅ معالج مفتاح Enter
+  // ============================================
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && isConnected && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }, [sendMessage, isConnected]);
+
+  // ============================================
+  // ✅ تنسيق الوقت
+  // ============================================
 
   const formatTime = (time: string) => {
     return new Date(time).toLocaleTimeString('ar-SA', {
@@ -141,8 +218,22 @@ const Chat: React.FC<Props> = ({ onClose }) => {
     });
   };
 
+  // ============================================
+  // ✅ التحقق من أن الرسالة للمستخدم الحالي
+  // ============================================
+
+  const isOwnMessage = (msg: Message) => {
+    const displayName = user?.full_name || user?.username;
+    return msg.user === displayName;
+  };
+
+  // ============================================
+  // ✅ Render
+  // ============================================
+
   return (
     <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
@@ -166,6 +257,7 @@ const Chat: React.FC<Props> = ({ onClose }) => {
         </button>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 bg-gray-50 min-h-[400px] max-h-[500px]">
         {messages.length === 0 ? (
           <div className="text-center text-gray-400 mt-20">
@@ -174,36 +266,39 @@ const Chat: React.FC<Props> = ({ onClose }) => {
             <p className="text-sm">كن أول من يكتب!</p>
           </div>
         ) : (
-          messages.map((msg, index) => (
-            <div key={index} className={`mb-3 ${msg.isSystem ? 'text-center' : ''}`}>
-              {msg.isSystem ? (
-                <div className="text-xs text-gray-400 bg-gray-200/50 rounded-full px-4 py-1 inline-block">
-                  {msg.text}
-                </div>
-              ) : (
-                <div className={`flex ${msg.user === (user?.full_name || user?.username) ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[70%] ${msg.user === (user?.full_name || user?.username) ? 'bg-purple-500 text-white' : 'bg-white border border-gray-200'} rounded-2xl px-4 py-2 shadow-sm`}>
-                    <div className={`text-xs font-semibold ${msg.user === (user?.full_name || user?.username) ? 'text-purple-200' : 'text-purple-600'} mb-0.5`}>
-                      {msg.user}
-                    </div>
-                    <div className="text-sm break-words">{msg.text}</div>
-                    <div className={`text-[10px] mt-1 ${msg.user === (user?.full_name || user?.username) ? 'text-purple-200/70' : 'text-gray-400'}`}>
-                      {formatTime(msg.time)}
+          <>
+            {messages.map((msg, index) => (
+              <div key={index} className={`mb-3 ${msg.isSystem ? 'text-center' : ''}`}>
+                {msg.isSystem ? (
+                  <div className="text-xs text-gray-400 bg-gray-200/50 rounded-full px-4 py-1 inline-block">
+                    {msg.text}
+                  </div>
+                ) : (
+                  <div className={`flex ${isOwnMessage(msg) ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[70%] ${isOwnMessage(msg) ? 'bg-purple-500 text-white' : 'bg-white border border-gray-200'} rounded-2xl px-4 py-2 shadow-sm`}>
+                      <div className={`text-xs font-semibold ${isOwnMessage(msg) ? 'text-purple-200' : 'text-purple-600'} mb-0.5`}>
+                        {msg.user}
+                      </div>
+                      <div className="text-sm break-words">{msg.text}</div>
+                      <div className={`text-[10px] mt-1 ${isOwnMessage(msg) ? 'text-purple-200/70' : 'text-gray-400'}`}>
+                        {formatTime(msg.time)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))
+                )}
+              </div>
+            ))}
+            {typingUsers.length > 0 && (
+              <div className="text-xs text-gray-400 italic">
+                {typingUsers.join(', ')} يكتب...
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </>
         )}
-        {typingUsers.length > 0 && (
-          <div className="text-xs text-gray-400 italic">
-            {typingUsers.join(', ')} يكتب...
-          </div>
-        )}
-        <div ref={messagesEndRef} />
       </div>
 
+      {/* Input */}
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="flex gap-2">
           <input
@@ -213,12 +308,8 @@ const Chat: React.FC<Props> = ({ onClose }) => {
               setInputMessage(e.target.value);
               handleTyping();
             }}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && isConnected) {
-                sendMessage();
-              }
-            }}
-            placeholder="اكتب رسالتك..."
+            onKeyPress={handleKeyPress}
+            placeholder={isConnected ? "اكتب رسالتك..." : "جارٍ الاتصال..."}
             className="flex-1 border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
             disabled={!isConnected || !user}
           />
@@ -230,6 +321,12 @@ const Chat: React.FC<Props> = ({ onClose }) => {
             <i className="fas fa-paper-plane"></i>
           </button>
         </div>
+        {!isConnected && (
+          <p className="text-xs text-red-500 mt-2 text-center">
+            <i className="fas fa-exclamation-circle"></i>
+            {' '}غير متصل بالدردشة. جاري إعادة المحاولة...
+          </p>
+        )}
       </div>
     </div>
   );

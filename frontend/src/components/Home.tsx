@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+// src/components/Home.tsx
+import { useState, useEffect, useMemo } from 'react';
 import { purchaseApi } from '../api/purchaseApi';
 import type { DashboardStats } from '../types/purchase.types';
 import toast from 'react-hot-toast';
@@ -19,6 +20,10 @@ const Home: React.FC<Props> = ({
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ============================================
+  // ✅ جلب الإحصائيات
+  // ============================================
+
   useEffect(() => {
     loadStats();
   }, []);
@@ -36,27 +41,32 @@ const Home: React.FC<Props> = ({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
-          <p className="mt-4 text-gray-600">جاري تحميل البيانات...</p>
-        </div>
-      </div>
-    );
-  }
+  // ============================================
+  // ✅ حساب النسب
+  // ============================================
 
-  if (!stats) return null;
+  const completionRate = useMemo(() => {
+    if (!stats || stats.total === 0) return 0;
+    return Math.round((stats.completed / stats.total) * 100);
+  }, [stats]);
 
-  const completionRate = stats.total > 0 
-    ? Math.round((stats.completed / stats.total) * 100) 
-    : 0;
+  const alertCount = useMemo(() => {
+    if (!stats) return 0;
+    return (stats.overdue || 0) + (stats.expiringToday || 0);
+  }, [stats]);
 
-  const alertCount = (stats.overdue || 0) + (stats.expiringToday || 0);
+  const statusColors: Record<string, string> = {
+    'منجز': 'bg-green-500',
+    'قيد التنفيذ': 'bg-yellow-500',
+    'معلق': 'bg-red-500',
+    'ملغي': 'bg-gray-400'
+  };
 
-  // ✅ بطاقات الوصول السريع - بيانات موحدة
-  const quickCards = [
+  // ============================================
+  // ✅ بيانات البطاقات
+  // ============================================
+
+  const quickCards = useMemo(() => [
     { 
       id: 'dashboard',
       icon: 'fa-chart-pie', 
@@ -90,39 +100,62 @@ const Home: React.FC<Props> = ({
       color: 'from-orange-500 to-orange-600',
       onClick: onExportExcel
     }
-  ];
+  ], [alertCount, onOpenDashboard, onOpenAddForm, onOpenAlerts, onExportExcel]);
 
-  // ✅ إحصائيات سريعة - بيانات موحدة
-  const statsCards = [
-    { 
-      id: 'total',
-      icon: 'fa-clipboard-list', 
-      title: 'إجمالي الطلبات', 
-      value: stats.total,
-      color: 'bg-blue-100',
-      iconColor: 'text-blue-600'
-    },
-    { 
-      id: 'completed',
-      icon: 'fa-check-circle', 
-      title: 'الطلبات المنجزة', 
-      value: stats.completed,
-      color: 'bg-green-100',
-      iconColor: 'text-green-600'
-    },
-    { 
-      id: 'delayed',
-      icon: 'fa-clock', 
-      title: 'الطلبات المتأخرة', 
-      value: stats.delayed,
-      color: 'bg-orange-100',
-      iconColor: 'text-orange-600'
-    }
-  ];
+  const statsCards = useMemo(() => {
+    if (!stats) return [];
+    return [
+      { 
+        id: 'total',
+        icon: 'fa-clipboard-list', 
+        title: 'إجمالي الطلبات', 
+        value: stats.total,
+        color: 'bg-blue-100',
+        iconColor: 'text-blue-600'
+      },
+      { 
+        id: 'completed',
+        icon: 'fa-check-circle', 
+        title: 'الطلبات المنجزة', 
+        value: stats.completed,
+        color: 'bg-green-100',
+        iconColor: 'text-green-600'
+      },
+      { 
+        id: 'delayed',
+        icon: 'fa-clock', 
+        title: 'الطلبات المتأخرة', 
+        value: stats.delayed,
+        color: 'bg-orange-100',
+        iconColor: 'text-orange-600'
+      }
+    ];
+  }, [stats]);
+
+  // ============================================
+  // ✅ حالة التحميل
+  // ============================================
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
+          <p className="mt-4 text-gray-600">جاري تحميل البيانات...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  // ============================================
+  // ✅ Render
+  // ============================================
 
   return (
     <div className="space-y-6">
-      {/* ✅ بطاقة الترحيب - محسنة */}
+      {/* بطاقة الترحيب */}
       <div className="bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 rounded-3xl p-6 md:p-8 text-white shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
@@ -161,7 +194,7 @@ const Home: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* ✅ بطاقات الوصول السريع - باستخدام حلقة */}
+      {/* بطاقات الوصول السريع */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {quickCards.map((card) => (
           <div 
@@ -183,7 +216,7 @@ const Home: React.FC<Props> = ({
         ))}
       </div>
 
-      {/* ✅ إحصائيات سريعة - باستخدام حلقة */}
+      {/* إحصائيات سريعة */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {statsCards.map((card) => (
           <div key={card.id} className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 flex items-center gap-4">
@@ -198,45 +231,57 @@ const Home: React.FC<Props> = ({
         ))}
       </div>
 
-      {/* ✅ توزيع الطلبات - مبسط وجميل */}
+      {/* توزيع الطلبات */}
       <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
-        <p className="text-sm font-bold text-gray-700 mb-3">📊 توزيع الطلبات</p>
+        <div className="flex justify-between items-center mb-3">
+          <p className="text-sm font-bold text-gray-700">📊 توزيع الطلبات</p>
+          <span className="text-xs text-gray-400">{stats.total} طلب</span>
+        </div>
+        
         <div className="flex h-4 rounded-full overflow-hidden">
           {stats.byStatus.map((item) => {
             const percentage = stats.total > 0 ? (item.count / stats.total) * 100 : 0;
-            const colors: Record<string, string> = {
-              'منجز': 'bg-green-500',
-              'قيد التنفيذ': 'bg-yellow-500',
-              'معلق': 'bg-red-500',
-              'ملغي': 'bg-gray-400'
-            };
             return (
               <div 
                 key={item.status}
-                className={`${colors[item.status] || 'bg-gray-400'} transition-all duration-1000`}
+                className={`${statusColors[item.status] || 'bg-gray-400'} transition-all duration-1000`}
                 style={{ width: `${percentage}%` }}
                 title={`${item.status}: ${item.count}`}
               />
             );
           })}
         </div>
+        
         <div className="flex flex-wrap gap-3 mt-2 text-xs">
-          {stats.byStatus.map((item) => {
-            const colors: Record<string, string> = {
-              'منجز': 'bg-green-500',
-              'قيد التنفيذ': 'bg-yellow-500',
-              'معلق': 'bg-red-500',
-              'ملغي': 'bg-gray-400'
-            };
-            return (
-              <span key={item.status} className="flex items-center gap-1">
-                <span className={`w-2.5 h-2.5 rounded-full ${colors[item.status] || 'bg-gray-400'}`}></span>
-                {item.status} ({item.count})
-              </span>
-            );
-          })}
+          {stats.byStatus.map((item) => (
+            <span key={item.status} className="flex items-center gap-1">
+              <span className={`w-2.5 h-2.5 rounded-full ${statusColors[item.status] || 'bg-gray-400'}`}></span>
+              {item.status} ({item.count})
+            </span>
+          ))}
         </div>
       </div>
+
+      {/* تنبيهات سريعة */}
+      {alertCount > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <i className="fas fa-bell text-red-500"></i>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-red-700">لديك {alertCount} تنبيه</p>
+              <p className="text-xs text-red-500">طلبات متأخرة أو منتهية اليوم</p>
+            </div>
+          </div>
+          <button
+            onClick={onOpenAlerts}
+            className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors text-sm"
+          >
+            عرض
+          </button>
+        </div>
+      )}
     </div>
   );
 };

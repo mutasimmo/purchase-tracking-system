@@ -1,11 +1,284 @@
-/* تنسيقات إضافية للتطبيق */
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
 
+/* ============================================
+   🎨 تنسيقات إضافية للتطبيق
+   ============================================ */
+
 * {
-  font-family: 'Cairo', sans-serif;
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  box-sizing: border-box;
 }
 
-/* تنسيق خاص للطباعة */
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  direction: rtl;
+}
+
+/* ============================================
+   🎬 Animations
+   ============================================ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+/* ============================================
+   📱 Container
+   ============================================ */
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding: 2rem;
+  }
+}
+
+/* ============================================
+   📋 Page Title
+   ============================================ */
+
+.page-title {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 900;
+}
+
+/* ============================================
+   📊 Dashboard Cards
+   ============================================ */
+
+.dashboard-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.dashboard-card-green {
+  background: linear-gradient(135deg, #00b894 0%, #00a86b 100%);
+}
+
+.dashboard-card-yellow {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+}
+
+.dashboard-card-red {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+}
+
+.dashboard-card-purple {
+  background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+}
+
+.dashboard-card-orange {
+  background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
+}
+
+/* ============================================
+   📋 Table Styles
+   ============================================ */
+
+.table-modern {
+  background: white;
+  border-radius: 1.5rem;
+  padding: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+.table-modern table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table-modern thead {
+  background: linear-gradient(135deg, #2d3436 0%, #1a1a2e 100%);
+  border-radius: 1rem;
+}
+
+.table-modern thead th {
+  color: white;
+  padding: 12px 16px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.table-modern thead th:first-child {
+  border-radius: 0 1rem 0 0;
+}
+
+.table-modern thead th:last-child {
+  border-radius: 1rem 0 0 0;
+}
+
+.table-modern tbody tr {
+  transition: all 0.3s ease;
+  border-bottom: 1px solid #f1f2f6;
+}
+
+.table-modern tbody tr:last-child {
+  border-bottom: none;
+}
+
+.table-modern tbody tr:hover {
+  background: #f8f9fa;
+  transform: scale(1.01);
+}
+
+.table-modern tbody td {
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+/* ============================================
+   🏷️ Status Badges
+   ============================================ */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-inprogress {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.status-pending {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.status-cancelled {
+  background: #e2e3e5;
+  color: #383d41;
+  border: 1px solid #d6d8db;
+}
+
+/* ============================================
+   🎯 Buttons
+   ============================================ */
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+  color: white;
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(214, 48, 49, 0.4);
+}
+
+/* ============================================
+   📱 Forms
+   ============================================ */
+
+input, select, textarea {
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  transition: all 0.3s ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* ============================================
+   📦 Cards
+   ============================================ */
+
+.card-shadow {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.card-shadow:hover {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+  transform: translateY(-4px);
+}
+
+/* ============================================
+   🖨️ Print Styles
+   ============================================ */
+
 @media print {
   body {
     background: white !important;
@@ -19,6 +292,8 @@
   .table-modern {
     box-shadow: none !important;
     border: 1px solid #ddd !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
   }
   
   .table-modern thead {
@@ -31,6 +306,15 @@
     color: white !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  
+  .table-modern tbody tr {
+    border-bottom: 1px solid #ddd !important;
+  }
+  
+  .table-modern tbody tr:hover {
+    background: transparent !important;
+    transform: none !important;
   }
   
   .status-badge {
@@ -47,4 +331,194 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  
+  .container {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+  
+  .fade-in-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ============================================
+   📱 Responsive
+   ============================================ */
+
+@media (max-width: 640px) {
+  .table-modern {
+    padding: 0.5rem;
+    border-radius: 1rem;
+  }
+  
+  .table-modern thead th,
+  .table-modern tbody td {
+    padding: 8px 10px;
+    font-size: 0.75rem;
+  }
+  
+  .status-badge {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+  }
+  
+  .btn-primary,
+  .btn-danger {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-modern thead th {
+    font-size: 0.65rem;
+    padding: 6px 8px;
+  }
+  
+  .table-modern tbody td {
+    font-size: 0.65rem;
+    padding: 6px 8px;
+  }
+}
+
+/* ============================================
+   🎨 Scrollbar
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f2f6;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+/* ============================================
+   🎯 Toast (react-hot-toast)
+   ============================================ */
+
+.toast-container {
+  font-family: 'Cairo', 'Tajawal', sans-serif;
+  direction: rtl;
+}
+
+/* ============================================
+   🔔 Alerts
+   ============================================ */
+
+.alert-critical {
+  background: #fee2e2;
+  border-right: 4px solid #dc2626;
+  color: #991b1b;
+}
+
+.alert-warning {
+  background: #fef3c7;
+  border-right: 4px solid #f59e0b;
+  color: #92400e;
+}
+
+.alert-info {
+  background: #dbeafe;
+  border-right: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+.alert-success {
+  background: #d1fae5;
+  border-right: 4px solid #10b981;
+  color: #065f46;
+}
+
+/* ============================================
+   💬 Chat
+   ============================================ */
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 500px;
+  background: white;
+  border-radius: 1.5rem;
+  overflow: hidden;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat-message {
+  max-width: 80%;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  word-wrap: break-word;
+}
+
+.chat-message.own {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.chat-message.other {
+  align-self: flex-start;
+  background: #f1f2f6;
+  color: #2d3436;
+}
+
+.chat-message.system {
+  align-self: center;
+  background: #e2e3e5;
+  color: #6c757d;
+  font-size: 0.8rem;
+  max-width: 60%;
+}
+
+.chat-input {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-top: 1px solid #e2e3e5;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e2e3e5;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.chat-input button {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.3s ease;
+}
+
+.chat-input button:hover {
+  transform: scale(1.05);
 }

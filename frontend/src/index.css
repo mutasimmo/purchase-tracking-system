@@ -1,402 +1,142 @@
+/* src/index.css */
+
+/* ============================================
+   🎨 استيراد الخطوط - يجب أن يكون في البداية
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+
+/* ============================================
+   🎨 Tailwind CSS
+   ============================================ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  * {
-    direction: rtl;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+/* ============================================
+   📱 تنسيقات عامة
+   ============================================ */
 
+* {
+  font-family: 'Cairo', 'Tajawal', 'Segoe UI', sans-serif;
+  box-sizing: border-box;
+}
+
+html {
+  direction: rtl;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================
+   🎯 التمرير السلس
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f2f6;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+
+/* ============================================
+   📱 تحسينات للطباعة
+   ============================================ */
+
+@media print {
   body {
-    font-family: 'Cairo', 'Tajawal', sans-serif;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
-    color: #1a1a2e;
-    overflow-x: hidden;
+    background: white !important;
   }
-
-  /* تحسين التمرير */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 10px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #5a67d8 0%, #6b46a1 100%);
-  }
-
-  /* أنيميشن للعناصر */
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .fade-in-up {
-    animation: fadeInUp 0.5s ease-out;
-  }
-
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-    }
-    50% {
-      transform: scale(1.05);
-    }
-  }
-
-  .pulse-on-hover:hover {
-    animation: pulse 0.3s ease-in-out;
-  }
-
-  /* ============================================
-     🖨️ تنسيقات الطباعة لورقة A4
-     ============================================ */
-  @media print {
-    .no-print {
-      display: none !important;
-    }
-
-    @page {
-      size: A4 portrait;
-      margin: 15mm 10mm 15mm 10mm;
-    }
-
-    body {
-      background: white !important;
-      padding: 0 !important;
-      margin: 0 !important;
-    }
-
-    .print-container {
-      padding: 0 !important;
-      margin: 0 !important;
-      background: white !important;
-    }
-
-    .print-container::before {
-      content: "تقرير طلبات المشتريات";
-      display: block;
-      text-align: center;
-      font-size: 22px;
-      font-weight: 900;
-      font-family: 'Cairo', sans-serif;
-      color: #1a1a2e;
-      padding: 10px 0 15px 0;
-      border-bottom: 3px solid #667eea;
-      margin-bottom: 15px;
-      letter-spacing: 1px;
-    }
-
-    .table-modern {
-      box-shadow: none !important;
-      border: 1px solid #ddd !important;
-      border-radius: 0 !important;
-      background: white !important;
-      width: 100% !important;
-    }
-
-    .table-modern table {
-      width: 100% !important;
-      border-collapse: collapse !important;
-      font-size: 10px !important;
-      font-family: 'Cairo', sans-serif !important;
-    }
-
-    .table-modern thead {
-      background: #2d3436 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-
-    .table-modern thead th {
-      color: white !important;
-      padding: 6px 4px !important;
-      font-size: 9px !important;
-      font-weight: 700 !important;
-      text-align: center !important;
-      border: 1px solid #2d3436 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-
-    .table-modern tbody td {
-      padding: 4px 4px !important;
-      font-size: 9px !important;
-      text-align: center !important;
-      border: 1px solid #e5e7eb !important;
-      color: #1a1a2e !important;
-      word-wrap: break-word !important;
-    }
-
-    .table-modern tbody tr:nth-child(even) {
-      background-color: #f9fafb !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-
-    .status-badge {
-      padding: 2px 6px !important;
-      border-radius: 4px !important;
-      font-size: 8px !important;
-      font-weight: 700 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-
-    .status-badge i {
-      display: none !important;
-    }
-
-    .status-completed {
-      background: #d4edda !important;
-      color: #155724 !important;
-      border: 1px solid #c3e6cb !important;
-    }
-
-    .status-inprogress {
-      background: #fff3cd !important;
-      color: #856404 !important;
-      border: 1px solid #ffeaa7 !important;
-    }
-
-    .status-pending {
-      background: #f8d7da !important;
-      color: #721c24 !important;
-      border: 1px solid #f5c6cb !important;
-    }
-
-    .status-cancelled {
-      background: #e2e3e5 !important;
-      color: #383d41 !important;
-      border: 1px solid #d6d8db !important;
-    }
-  }
-
-  /* ============================================
-     📱 تنسيقات Responsive إضافية
-     ============================================ */
   
-  /* للشاشات الصغيرة جداً */
-  @media (max-width: 480px) {
-    .container {
-      padding-left: 8px !important;
-      padding-right: 8px !important;
-    }
-    
-    .text-xs {
-      font-size: 10px !important;
-    }
-    
-    .text-sm {
-      font-size: 11px !important;
-    }
-  }
-
-  /* للشاشات المتوسطة */
-  @media (min-width: 768px) and (max-width: 1024px) {
-    .container {
-      padding-left: 16px !important;
-      padding-right: 16px !important;
-    }
-  }
-
-  /* للشاشات الكبيرة */
-  @media (min-width: 1440px) {
-    .container {
-      max-width: 1400px !important;
-    }
+  .no-print {
+    display: none !important;
   }
 }
 
-@layer components {
-  /* بطاقات إحصائية */
-  .stat-card {
-    @apply bg-white rounded-2xl shadow-lg p-4 md:p-6 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1;
-    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(10px);
-  }
+/* ============================================
+   🔧 تنسيقات إضافية
+   ============================================ */
 
-  .stat-card .icon {
-    @apply w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center text-xl md:text-2xl;
-  }
+/* إخفاء أسهم الإدخال الرقمي */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
-  /* أزرار مخصصة */
-  .btn-primary {
-    @apply px-4 py-2 md:px-6 md:py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm md:text-base;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-  }
+input[type=number] {
+  -moz-appearance: textfield;
+}
 
-  .btn-primary:hover {
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-  }
+/* تنسيق التركيز */
+*:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
 
-  .btn-success {
-    @apply px-4 py-2 md:px-6 md:py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm md:text-base;
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
-  }
+/* تنسيق الروابط */
+a {
+  color: #667eea;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
 
-  .btn-success:hover {
-    box-shadow: 0 6px 20px rgba(17, 153, 142, 0.6);
-  }
+a:hover {
+  color: #764ba2;
+}
 
-  .btn-danger {
-    @apply px-4 py-2 md:px-6 md:py-2.5 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 text-sm md:text-base;
-    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(235, 51, 73, 0.4);
-  }
-
-  .btn-danger:hover {
-    box-shadow: 0 6px 20px rgba(235, 51, 73, 0.6);
-  }
-
-  /* جدول عصري - Responsive */
+/* تنسيق الجداول للطباعة */
+@media print {
   .table-modern {
-    @apply w-full bg-white rounded-2xl overflow-hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
   }
-
+  
   .table-modern thead {
-    background: linear-gradient(135deg, #2d3436 0%, #1a1a2e 100%);
+    background: #2d3436 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-
+  
   .table-modern thead th {
-    @apply px-3 py-3 md:px-6 md:py-4 text-right text-white font-bold text-xs md:text-sm uppercase tracking-wider;
-    font-family: 'Cairo', sans-serif;
-    font-weight: 700;
-    letter-spacing: 0.5px;
+    color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-
-  .table-modern tbody tr {
-    @apply transition-all duration-200 border-b border-gray-100;
-  }
-
-  .table-modern tbody tr:hover {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    transform: scale(1.002);
-  }
-
-  .table-modern tbody td {
-    @apply px-3 py-2 md:px-6 md:py-4 text-right text-gray-700 text-xs md:text-sm;
-    font-family: 'Cairo', sans-serif;
-  }
-
-  /* شارات الحالة */
+  
   .status-badge {
-    @apply px-2 py-1 md:px-3 md:py-1.5 rounded-full text-xs md:text-sm font-bold inline-flex items-center gap-1 md:gap-1.5;
-    font-family: 'Cairo', sans-serif;
-    font-weight: 600;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-
-  .status-completed {
-    background: linear-gradient(135deg, #d4edda 0%, #b7eb8f 100%);
-    color: #155724;
-  }
-
-  .status-inprogress {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-    color: #856404;
-  }
-
-  .status-pending {
-    background: linear-gradient(135deg, #f8d7da 0%, #f5a3a3 100%);
-    color: #721c24;
-  }
-
-  .status-cancelled {
-    background: linear-gradient(135deg, #e2e3e5 0%, #d1d1d1 100%);
-    color: #383d41;
-  }
-
-  /* نموذج عصري */
-  .form-modern {
-    @apply bg-white rounded-2xl shadow-2xl p-4 md:p-8;
-    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  }
-
-  .form-modern input,
-  .form-modern select,
-  .form-modern textarea {
-    @apply w-full border-2 border-gray-200 rounded-xl px-3 py-2 md:px-4 md:py-3 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm md:text-base;
-    font-family: 'Cairo', sans-serif;
-    background: rgba(255, 255, 255, 0.9);
-  }
-
-  .form-modern input:hover,
-  .form-modern select:hover,
-  .form-modern textarea:hover {
-    border-color: #764ba2;
-  }
-
-  .form-modern label {
-    @apply block text-xs md:text-sm font-bold text-gray-700 mb-1 md:mb-2;
-    font-family: 'Cairo', sans-serif;
-  }
-
-  /* عنوان الصفحة */
-  .page-title {
-    font-family: 'Cairo', sans-serif;
-    font-weight: 900;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-size: clamp(1.5rem, 5vw, 3rem);
-  }
-
-  /* بطاقة لوحة التحكم */
-  .dashboard-card {
-    @apply rounded-2xl p-4 md:p-6 text-white transition-all duration-300 hover:scale-105;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-  }
-
-  .dashboard-card-green {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    box-shadow: 0 10px 30px rgba(17, 153, 142, 0.3);
-  }
-
-  .dashboard-card-yellow {
-    background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);
-    box-shadow: 0 10px 30px rgba(242, 153, 74, 0.3);
-  }
-
-  .dashboard-card-red {
-    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-    box-shadow: 0 10px 30px rgba(235, 51, 73, 0.3);
-  }
-
-  .dashboard-card-purple {
-    background: linear-gradient(135deg, #8e2de2 0%, #4a00e0 100%);
-    box-shadow: 0 10px 30px rgba(142, 45, 226, 0.3);
-  }
-
+  
+  .dashboard-card,
+  .dashboard-card-green,
+  .dashboard-card-yellow,
+  .dashboard-card-red,
+  .dashboard-card-purple,
   .dashboard-card-orange {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    box-shadow: 0 10px 30px rgba(245, 87, 108, 0.3);
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

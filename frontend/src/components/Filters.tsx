@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import type { PurchaseFilters } from '../types/purchase.types';
+// src/components/Filters.tsx
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { PurchaseFilters, PurchaseStatus } from '../types/purchase.types';
 
 interface Props {
   onFilterChange: (filters: PurchaseFilters) => void;
@@ -15,45 +16,91 @@ const Filters: React.FC<Props> = ({
   initialFilters 
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
-  const [status, setStatus] = useState(initialFilters?.status || '');
+  // ✅ إصلاح: استخدام النوع الصحيح مع كل الحالات الممكنة
+  const [status, setStatus] = useState<PurchaseStatus | 'all' | ''>(initialFilters?.status || '');
   const [startDate, setStartDate] = useState(initialFilters?.startDate || '');
   const [endDate, setEndDate] = useState(initialFilters?.endDate || '');
+  
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ============================================
+  // ✅ تطبيق الفلاتر مع Debounce
+  // ============================================
 
   useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     const filters: PurchaseFilters = {};
-    if (status) filters.status = status;
+    // ✅ إصلاح: التحقق من status بشكل صحيح
+    if (status && status !== 'all' && status !== '') {
+      filters.status = status;
+    }
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (searchTerm) filters.search = searchTerm;
-    onFilterChange(filters);
-  }, [status, startDate, endDate, searchTerm]);
 
-  const handleSearch = () => {
+    searchTimeoutRef.current = setTimeout(() => {
+      onFilterChange(filters);
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [status, startDate, endDate, searchTerm, onFilterChange]);
+
+  // ============================================
+  // ✅ دوال المعالجة
+  // ============================================
+
+  const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
-    if (status) filters.status = status;
+    if (status && status !== 'all' && status !== '') {
+      filters.status = status;
+    }
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (searchTerm) filters.search = searchTerm;
     onFilterChange(filters);
-  };
+  }, [searchTerm, status, startDate, endDate, onSearch, onFilterChange]);
 
-  const handleClear = () => {
+  const handleClear = useCallback(() => {
+    const activeFilters = [searchTerm, status, startDate, endDate].filter(Boolean).length;
+    
+    if (activeFilters > 0) {
+      if (!window.confirm('هل أنت متأكد من مسح جميع الفلاتر؟')) {
+        return;
+      }
+    }
+    
     setSearchTerm('');
     setStatus('');
     setStartDate('');
     setEndDate('');
     onFilterChange({});
     onSearch('');
-  };
+  }, [searchTerm, status, startDate, endDate, onFilterChange, onSearch]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
-  };
+  }, [handleSearch]);
 
-  const statusOptions = ['', 'قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
+  // ============================================
+  // ✅ المتغيرات
+  // ============================================
+
+  const statusOptions: (PurchaseStatus | '')[] = ['', 'قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
+  const activeFiltersCount = [searchTerm, status, startDate, endDate].filter(Boolean).length;
+
+  // ============================================
+  // ✅ Render
+  // ============================================
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-3 md:p-4 mb-6">
@@ -90,12 +137,14 @@ const Filters: React.FC<Props> = ({
           </label>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => setStatus(e.target.value as PurchaseStatus | '')}
             className="w-full border border-gray-300 rounded-lg px-2 py-1.5 md:px-4 md:py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs md:text-sm"
             disabled={loading}
           >
-            {statusOptions.map(s => (
-              <option key={s || 'all'} value={s}>{s || 'الكل'}</option>
+            {statusOptions.map((s) => (
+              <option key={s || 'all'} value={s}>
+                {s || 'الكل'}
+              </option>
             ))}
           </select>
         </div>
@@ -142,31 +191,34 @@ const Filters: React.FC<Props> = ({
       </div>
 
       {/* عرض الفلترة النشطة */}
-      {(searchTerm || status || startDate || endDate) && (
-        <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-200 flex flex-wrap gap-1 md:gap-2">
-          <span className="text-xs text-gray-500 flex items-center gap-1">
-            <i className="fas fa-filter"></i> الفلترة:
-          </span>
-          {searchTerm && (
-            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 md:py-1 rounded-full">
-              بحث: {searchTerm}
+      {activeFiltersCount > 0 && (
+        <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-200">
+          <div className="flex flex-wrap items-center gap-1 md:gap-2">
+            <span className="text-xs text-gray-500 flex items-center gap-1">
+              <i className="fas fa-filter"></i> 
+              الفلترة ({activeFiltersCount}):
             </span>
-          )}
-          {status && (
-            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 md:py-1 rounded-full">
-              {status}
-            </span>
-          )}
-          {startDate && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 md:py-1 rounded-full">
-              من: {startDate}
-            </span>
-          )}
-          {endDate && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 md:py-1 rounded-full">
-              إلى: {endDate}
-            </span>
-          )}
+            {searchTerm && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 md:py-1 rounded-full">
+                بحث: {searchTerm}
+              </span>
+            )}
+            {status && status !== 'all' && (
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 md:py-1 rounded-full">
+                {status}
+              </span>
+            )}
+            {startDate && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 md:py-1 rounded-full">
+                من: {startDate}
+              </span>
+            )}
+            {endDate && (
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 md:py-1 rounded-full">
+                إلى: {endDate}
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+// src/App.tsx
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { purchaseApi } from './api/purchaseApi';
-import { authApi } from './api/authApi';
-import type { Purchase, PurchaseFilters } from './types/purchase.types';
+import type { Purchase, PurchaseFilters, PurchaseStatus } from './types/purchase.types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PurchaseTable from './components/PurchaseTable';
 import PurchaseForm from './components/PurchaseForm';
@@ -15,16 +15,24 @@ import Register from './components/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import Alerts from './components/Alerts';
 import AlertBell from './components/AlertBell';
-import AuditLogs from './components/AuditLogs';
 import UserManagement from './components/UserManagement';
 import Chat from './components/Chat';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
 
-// مكون التطبيق الرئيسي (محمي)
+// ============================================
+// ✅ مكون التطبيق الرئيسي
+// ============================================
+
 const AppContent = () => {
   const { user, logout, isAdmin } = useAuth();
+  const isUserAdmin = user?.role === 'admin';
+  
+  // ============================================
+  // ✅ State
+  // ============================================
+
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,22 +43,20 @@ const AppContent = () => {
   const [showDashboard, setShowDashboard] = useState(false);
   const [showHome, setShowHome] = useState(true);
   const [showAlerts, setShowAlerts] = useState(false);
-  const [showAuditLogs, setShowAuditLogs] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [nextRequestNumber, setNextRequestNumber] = useState<string>('');
-  const [filters, setFilters] = useState<PurchaseFilters>({
-    page: 1,
-    limit: 10
-  });
-  
+  const [filters, setFilters] = useState<PurchaseFilters>({ page: 1, limit: 10 });
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // توليد رقم الطلب التالي
+  // ============================================
+  // ✅ دوال مساعدة
+  // ============================================
+
   const generateNextRequestNumber = useCallback((existingPurchases: Purchase[]) => {
     if (existingPurchases.length === 0) return '001';
     const numbers = existingPurchases
@@ -58,11 +64,13 @@ const AppContent = () => {
       .filter(n => !isNaN(n));
     if (numbers.length === 0) return '001';
     const maxNumber = Math.max(...numbers);
-    const nextNumber = maxNumber + 1;
-    return String(nextNumber).padStart(3, '0');
+    return String(maxNumber + 1).padStart(3, '0');
   }, []);
 
-  // جلب الطلبات
+  // ============================================
+  // ✅ جلب الطلبات
+  // ============================================
+
   const loadPurchases = useCallback(async () => {
     try {
       setLoading(true);
@@ -103,66 +111,102 @@ const AppContent = () => {
     loadPurchases();
   }, [loadPurchases]);
 
-  // دوال CRUD
-  const handleAdd = () => {
-    if (!isAdmin) {
+  // ============================================
+  // ✅ تحديث البيانات بدون إعادة تحميل الصفحة
+  // ============================================
+
+  const refreshPurchases = useCallback(async () => {
+    try {
+      const filterParams: PurchaseFilters = {
+        page: filters.page || 1,
+        limit: filters.limit || 10
+      };
+      
+      if (filters.status) filterParams.status = filters.status;
+      if (filters.startDate) filterParams.startDate = filters.startDate;
+      if (filters.endDate) filterParams.endDate = filters.endDate;
+      if (filters.search) filterParams.search = filters.search;
+      
+      const response = await purchaseApi.getAll(filterParams);
+      setPurchases(response.data);
+      setTotal(response.total);
+      setTotalPages(response.totalPages);
+      setCurrentPage(response.page);
+    } catch (error) {
+      console.error('Error refreshing purchases:', error);
+    }
+  }, [filters]);
+
+  // ============================================
+  // ✅ تحديث حالة الطلب (بدون إعادة تحميل)
+  // ============================================
+
+  const handleStatusUpdate = useCallback(async (id: number, newStatus: string) => {
+    try {
+      await purchaseApi.updateStatus(id, newStatus);
+      
+      // ✅ تحويل newStatus إلى PurchaseStatus
+      setPurchases(prev => prev.map(p => 
+        p.id === id ? { ...p, status: newStatus as PurchaseStatus } : p
+      ));
+      
+      toast.success(`✅ تم تغيير الحالة إلى "${newStatus}"`);
+    } catch (error) {
+      toast.error('❌ حدث خطأ في تحديث الحالة');
+      console.error(error);
+    }
+  }, []);
+
+  // ============================================
+  // ✅ دوال CRUD
+  // ============================================
+
+  const handleAdd = useCallback(() => {
+    if (!isUserAdmin) {
       toast.error('❌ ليس لديك صلاحية لإضافة طلبات');
       return;
     }
     setEditingPurchase(null);
     setShowForm(true);
-  };
+  }, [isUserAdmin]);
 
-  const handleEdit = (purchase: Purchase) => {
-    if (!isAdmin) {
+  const handleEdit = useCallback((purchase: Purchase) => {
+    if (!isUserAdmin) {
       toast.error('❌ ليس لديك صلاحية لتعديل الطلبات');
       return;
     }
     setEditingPurchase(purchase);
     setShowForm(true);
-  };
+  }, [isUserAdmin]);
 
-  const handleDeleteClick = (id: number) => {
-    if (!isAdmin) {
+  const handleDeleteClick = useCallback((id: number) => {
+    if (!isUserAdmin) {
       toast.error('❌ ليس لديك صلاحية لحذف الطلبات');
       return;
     }
-    console.log('🗑️ Delete clicked for ID:', id);
     setDeleteId(id);
     setShowDeleteModal(true);
-  };
+  }, [isUserAdmin]);
 
-  const confirmDelete = async () => {
-    if (!deleteId) {
-      console.log('❌ No delete ID found');
-      return;
-    }
-    
-    console.log('🗑️ Confirming delete for ID:', deleteId);
+  const confirmDelete = useCallback(async () => {
+    if (!deleteId) return;
     
     try {
       setDeleting(true);
-      
-      const response = await purchaseApi.delete(deleteId);
-      console.log('✅ Delete response:', response);
-      
-      await loadPurchases();
-      
+      await purchaseApi.delete(deleteId);
       toast.success('🗑️ تم حذف الطلب بنجاح');
       setShowDeleteModal(false);
       setDeleteId(null);
+      await refreshPurchases();
     } catch (err: any) {
-      console.error('❌ Delete error:', err);
-      console.error('❌ Error response:', err.response?.data);
-      
       const errorMessage = err.response?.data?.error || '❌ حدث خطأ في حذف الطلب';
       toast.error(errorMessage);
     } finally {
       setDeleting(false);
     }
-  };
+  }, [deleteId, refreshPurchases]);
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = useCallback(async (data: any) => {
     try {
       setFormLoading(true);
       if (editingPurchase?.id) {
@@ -174,31 +218,37 @@ const AppContent = () => {
       }
       setShowForm(false);
       setEditingPurchase(null);
-      await loadPurchases();
+      await refreshPurchases();
     } catch (err) {
       toast.error('❌ حدث خطأ في حفظ الطلب');
       console.error(err);
     } finally {
       setFormLoading(false);
     }
-  };
+  }, [editingPurchase, refreshPurchases]);
 
-  // دوال البحث والفلترة
-  const handleSearch = (search: string) => {
+  // ============================================
+  // ✅ دوال البحث والفلترة
+  // ============================================
+
+  const handleSearch = useCallback((search: string) => {
     setFilters(prev => ({ ...prev, search: search || undefined, page: 1 }));
-  };
+  }, []);
 
-  const handleFilterChange = (newFilters: PurchaseFilters) => {
+  const handleFilterChange = useCallback((newFilters: PurchaseFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
-  };
+  }, []);
 
-  const handlePageChange = (page: number) => {
+  const handlePageChange = useCallback((page: number) => {
     setFilters(prev => ({ ...prev, page }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
-  // تصدير إلى Excel
-  const exportToExcel = () => {
+  // ============================================
+  // ✅ تصدير إلى Excel
+  // ============================================
+
+  const exportToExcel = useCallback(() => {
     try {
       if (purchases.length === 0) {
         toast.error('❌ لا توجد بيانات للتصدير');
@@ -232,65 +282,49 @@ const AppContent = () => {
       toast.error('❌ حدث خطأ في تصدير الملف');
       console.error(error);
     }
-  };
+  }, [purchases]);
 
-  // دالة للتبديل بين Home و Dashboard
-  const toggleView = () => {
-    if (showHome) {
-      setShowHome(false);
-      setShowDashboard(true);
-    } else {
-      setShowHome(true);
-      setShowDashboard(false);
-    }
-  };
+  // ============================================
+  // ✅ قيم محسوبة للعرض
+  // ============================================
+
+  const isHomeVisible = showHome;
+  const isDashboardVisible = showDashboard;
+
+  // ============================================
+  // ✅ Render
+  // ============================================
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-2 sm:p-4 md:p-8">
+      <Toaster 
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            fontFamily: 'Cairo, sans-serif',
+            direction: 'rtl',
+            padding: '16px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: { primary: '#22c55e', secondary: '#fff' },
+            style: { background: '#065f46', color: '#fff' },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: { primary: '#ef4444', secondary: '#fff' },
+            style: { background: '#7f1d1d', color: '#fff' },
+          },
+        }}
+      />
       
-<Toaster 
-  position="top-center"
-  toastOptions={{
-    duration: 3000,
-    style: {
-      fontFamily: 'Cairo, sans-serif',
-      direction: 'rtl',
-      padding: '16px 24px',
-      borderRadius: '12px',
-      boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-    },
-    success: {
-      duration: 3000,
-      iconTheme: {
-        primary: '#22c55e',
-        secondary: '#fff',
-      },
-      style: {
-        background: '#065f46',
-        color: '#fff',
-      },
-    },
-    error: {
-      duration: 4000,
-      iconTheme: {
-        primary: '#ef4444',
-        secondary: '#fff',
-      },
-      style: {
-        background: '#7f1d1d',
-        color: '#fff',
-      },
-    },
-  }}
-/>
       <div className="container mx-auto max-w-7xl">
-        {/* ============================================
-            HEADER
-            ============================================ */}
+        {/* HEADER */}
         <header className="bg-white/80 backdrop-blur-lg rounded-2xl md:rounded-3xl shadow-2xl p-3 sm:p-4 md:p-6 lg:p-8 mb-4 sm:mb-6 md:mb-8 border border-white/50 fade-in-up">
           <div className="flex flex-col lg:flex-row justify-between items-center gap-3 sm:gap-4">
-            
-            {/* القسم الأيسر: الشعار والمعلومات */}
             <div className="flex items-center gap-2 sm:gap-3 md:gap-4 w-full lg:w-auto">
               <div className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg flex-shrink-0">
                 <i className="fas fa-clipboard-list text-white text-base sm:text-lg md:text-2xl"></i>
@@ -311,7 +345,7 @@ const AppContent = () => {
                   <span className="text-[8px] sm:text-[10px] md:text-xs bg-purple-100 text-purple-700 px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full whitespace-nowrap hidden sm:inline">
                     <i className="fas fa-user text-[8px] sm:text-[10px]"></i> {user?.full_name}
                   </span>
-                  {isAdmin && (
+                  {isUserAdmin && (
                     <span className="text-[8px] sm:text-[10px] md:text-xs bg-red-100 text-red-700 px-1.5 sm:px-2 md:px-3 py-0.5 sm:py-1 rounded-full whitespace-nowrap">
                       <i className="fas fa-crown text-[8px] sm:text-[10px]"></i> مدير
                     </span>
@@ -320,15 +354,9 @@ const AppContent = () => {
               </div>
             </div>
             
-            {/* ==========================================
-                القسم الأيمن: الأزرار
-                ========================================== */}
             <div className="flex flex-wrap items-center justify-center lg:justify-end gap-1 sm:gap-1.5 md:gap-2 w-full lg:w-auto">
-              
-              {/* 🔔 جرس التنبيهات */}
               <AlertBell onClick={() => setShowAlerts(!showAlerts)} />
               
-              {/* 💬 زر الدردشة */}
               <button
                 onClick={() => setShowChat(!showChat)}
                 className="px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 bg-blue-500 text-white rounded-lg md:rounded-xl hover:bg-blue-600 transition-colors flex items-center gap-1 md:gap-2 no-print text-[10px] sm:text-xs md:text-sm whitespace-nowrap"
@@ -338,8 +366,7 @@ const AppContent = () => {
                 <span className="sm:hidden">💬</span>
               </button>
               
-              {/* 👥 إدارة المستخدمين (للمدير فقط) */}
-              {isAdmin && (
+              {isUserAdmin && (
                 <button
                   onClick={() => setShowUserManagement(!showUserManagement)}
                   className="px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 bg-indigo-500 text-white rounded-lg md:rounded-xl hover:bg-indigo-600 transition-colors flex items-center gap-1 md:gap-2 no-print text-[10px] sm:text-xs md:text-sm whitespace-nowrap"
@@ -350,7 +377,6 @@ const AppContent = () => {
                 </button>
               )}
               
-              {/* 🚪 خروج */}
               <button
                 onClick={logout}
                 className="px-2 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2 bg-red-500 text-white rounded-lg md:rounded-xl hover:bg-red-600 transition-colors flex items-center gap-1 md:gap-2 no-print text-[10px] sm:text-xs md:text-sm whitespace-nowrap"
@@ -359,13 +385,12 @@ const AppContent = () => {
                 <span className="hidden sm:inline">خروج</span>
                 <span className="sm:hidden">🚪</span>
               </button>
-              
             </div>
           </div>
         </header>
 
         {/* المحتوى الرئيسي */}
-        {showHome ? (
+        {isHomeVisible ? (
           <div className="fade-in-up">
             <Home 
               onOpenDashboard={() => {
@@ -379,8 +404,7 @@ const AppContent = () => {
           </div>
         ) : (
           <>
-            {/* Dashboard */}
-            {showDashboard && (
+            {isDashboardVisible && (
               <div className="mb-4 sm:mb-6 md:mb-8 fade-in-up">
                 <Dashboard onClose={() => {
                   setShowDashboard(false);
@@ -389,14 +413,12 @@ const AppContent = () => {
               </div>
             )}
 
-            {/* Filters */}
             <Filters 
               onFilterChange={handleFilterChange}
               onSearch={handleSearch}
               loading={loading}
             />
 
-            {/* Error Message */}
             {error && (
               <div className="bg-red-50 border-r-4 border-red-500 text-red-700 px-3 sm:px-4 md:px-6 py-3 sm:py-4 rounded-xl md:rounded-2xl mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 fade-in-up text-sm sm:text-base">
                 <i className="fas fa-exclamation-circle text-red-500 text-base sm:text-xl"></i>
@@ -404,17 +426,16 @@ const AppContent = () => {
               </div>
             )}
 
-            {/* Table */}
             <div className="fade-in-up">
               <PurchaseTable
                 purchases={purchases}
                 onEdit={handleEdit}
                 onDelete={handleDeleteClick}
+                onStatusChange={handleStatusUpdate}
                 loading={loading}
               />
             </div>
 
-            {/* Pagination */}
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -424,11 +445,7 @@ const AppContent = () => {
           </>
         )}
 
-        {/* ============================================
-            MODALS
-            ============================================ */}
-
-        {/* Form Modal */}
+        {/* MODALS */}
         {showForm && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <div className="bg-white rounded-2xl md:rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -446,7 +463,6 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <div className="bg-white rounded-2xl md:rounded-3xl max-w-md w-full p-4 sm:p-6 md:p-8 shadow-2xl">
@@ -493,7 +509,6 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* Alerts Modal */}
         {showAlerts && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -502,16 +517,6 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* Audit Logs Modal */}
-        {showAuditLogs && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
-            <div className="max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-              <AuditLogs onClose={() => setShowAuditLogs(false)} />
-            </div>
-          </div>
-        )}
-
-        {/* User Management Modal */}
         {showUserManagement && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <div className="max-w-5xl w-full max-h-[90vh] overflow-y-auto">
@@ -520,7 +525,6 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* 💬 Chat Modal */}
         {showChat && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <Chat onClose={() => setShowChat(false)} />
@@ -531,7 +535,10 @@ const AppContent = () => {
   );
 };
 
-// مكون تسجيل الدخول
+// ============================================
+// ✅ صفحة تسجيل الدخول
+// ============================================
+
 const LoginPage = () => {
   const { isAuthenticated } = useAuth();
   
@@ -555,7 +562,10 @@ const LoginPage = () => {
   );
 };
 
-// مكون التسجيل
+// ============================================
+// ✅ صفحة التسجيل
+// ============================================
+
 const RegisterPage = () => {
   const { isAuthenticated } = useAuth();
   
@@ -579,7 +589,10 @@ const RegisterPage = () => {
   );
 };
 
-// التطبيق الرئيسي
+// ============================================
+// ✅ التطبيق الرئيسي
+// ============================================
+
 function App() {
   return (
     <AuthProvider>
