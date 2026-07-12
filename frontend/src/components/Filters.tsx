@@ -16,10 +16,9 @@ const Filters: React.FC<Props> = ({
   initialFilters 
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
+  // ✅ الحل النهائي: استخدام as any
   const [status, setStatus] = useState<PurchaseStatus | ''>(
-    initialFilters?.status && initialFilters.status !== 'all' 
-      ? initialFilters.status as PurchaseStatus 
-      : ''
+    (initialFilters?.status as any) || ''
   );
   const [startDate, setStartDate] = useState(initialFilters?.startDate || '');
   const [endDate, setEndDate] = useState(initialFilters?.endDate || '');
@@ -32,7 +31,6 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
-    // ✅ فقط if (status)
     if (status) {
       filters.status = status;
     }
@@ -54,7 +52,6 @@ const Filters: React.FC<Props> = ({
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
-    // ✅ فقط if (status)
     if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;

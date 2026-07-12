@@ -26,11 +26,11 @@ export interface Purchase {
 }
 
 // ============================================
-// ✅ الفلاتر
+// ✅ الفلاتر - ✅ تم إزالة 'all'
 // ============================================
 
 export interface PurchaseFilters {
-  status?: PurchaseStatus | 'all';
+  status?: PurchaseStatus;  // ✅ إزالة 'all'
   startDate?: string;
   endDate?: string;
   search?: string;
