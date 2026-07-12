@@ -259,46 +259,52 @@ export const initDB = async () => {
     }
 
     // ============================================
-    // 👤 Create default users (development only)
+    // 👤 Create default users (always)
     // ============================================
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('🛠️ Development mode: Creating default users...');
+    console.log('🛠️ Creating default users...');
 
-      // Create Admin user
-      await ensureUser(
-        db,
-        'admin',
-        'مدير النظام',
-        'admin@example.com',
-        DEFAULT_ADMIN_PASSWORD || 'Admin@2024#Secure!',
-        'admin'
-      );
+    // Create Admin user
+    await ensureUser(
+      db,
+      'admin',
+      'مدير النظام',
+      'admin@example.com',
+      DEFAULT_ADMIN_PASSWORD || 'Admin@2024#Secure!NEW',
+      'admin'
+    );
 
-      // Create Mutasim user
-      await ensureUser(
-        db,
-        'mutasim',
-        'مدير النظام',
-        'mutasim41@gmail.com',
-        DEFAULT_MUTASIM_PASSWORD || 'Asmo@1985#Strong!',
-        'admin'
-      );
+    // Create Mutasim user
+    await ensureUser(
+      db,
+      'mutasim',
+      'مدير النظام',
+      'mutasim41@gmail.com',
+      'asmo1985',
+      'admin'
+    );
 
-      // Create Demo user
-      await ensureUser(
-        db,
-        'demo',
-        'مستخدم تجريبي',
-        'demo@example.com',
-        'Demo@2024#Test!',
-        'user'
-      );
+    // Create Mazin user
+    await ensureUser(
+      db,
+      'mazin',
+      'مدير النظام',
+      'mazin@example.com',
+      'mazin2026',
+      'admin'
+    );
 
-      console.log('✅ Default users created successfully');
-    } else {
-      console.log('🔒 Production mode: Skipping default user creation');
-    }
+    // Create Demo user
+    await ensureUser(
+      db,
+      'demo',
+      'مستخدم تجريبي',
+      'demo@example.com',
+      'Demo@2024#Test!',
+      'user'
+    );
+
+    console.log('✅ Default users created successfully');
 
     // ============================================
     // 🧹 Clean up expired tokens
