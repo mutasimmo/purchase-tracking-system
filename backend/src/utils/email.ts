@@ -2,7 +2,6 @@
 import nodemailer from 'nodemailer';
 import logger from '../config/logger.js';
 
-// ✅ إنشاء transporter
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || 'gmail',
   auth: {
@@ -11,8 +10,8 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// ✅ التحقق من الاتصال
-transporter.verify((error: Error | null, success: boolean) => {
+// ✅ استخدام any
+transporter.verify((error: any, success: any) => {
   if (error) {
     logger.error('❌ Email transporter error:', error);
   } else {
@@ -20,7 +19,6 @@ transporter.verify((error: Error | null, success: boolean) => {
   }
 });
 
-// ✅ إرسال بريد إلكتروني
 export const sendEmail = async (
   to: string,
   subject: string,
@@ -44,7 +42,6 @@ export const sendEmail = async (
   }
 };
 
-// ✅ إرسال تنبيه للمسؤول
 export const sendAlert = async (subject: string, message: string) => {
   const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
   
