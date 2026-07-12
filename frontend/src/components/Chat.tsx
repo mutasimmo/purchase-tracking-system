@@ -25,21 +25,28 @@ const Chat: React.FC<Props> = ({ onClose }) => {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
 
   const ROOM = 'general';
   const MAX_RETRY_ATTEMPTS = 5;
 
-  // ✅ استخدام متغير بيئي أو localhost للتطوير
-  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+  // ✅ استخدام الرابط الصحيح من البيئة
+  const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://purchase-backend-lmsm.onrender.com';
 
   // ============================================
-  // ✅ اتصال Socket.IO
+  // ✅ اتصال Socket.IO مع المصادقة
   // ============================================
 
   useEffect(() => {
-    console.log('🔌 Connecting to socket:', SOCKET_URL);
+    // ✅ الحصول على التوكن من localStorage
+    const token = localStorage.getItem('token');
     
+    if (!token) {
+      toast.error('❌ يرجى تسجيل الدخول للدردشة');
+      return;
+    }
+
     const newSocket = io(SOCKET_URL, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
@@ -47,7 +54,7 @@ const Chat: React.FC<Props> = ({ onClose }) => {
       reconnectionAttempts: MAX_RETRY_ATTEMPTS,
       reconnectionDelay: 1000,
       auth: {
-        token: localStorage.getItem('token') || ''
+        token: token
       }
     });
 
@@ -55,8 +62,6 @@ const Chat: React.FC<Props> = ({ onClose }) => {
 
     // ✅ معالج الاتصال
     newSocket.on('connect', () => {
-      console.log('✅ Connected to chat server');
-      console.log('🆔 Socket ID:', newSocket.id);
       setIsConnected(true);
       setReconnectAttempts(0);
       
@@ -64,13 +69,12 @@ const Chat: React.FC<Props> = ({ onClose }) => {
       if (user) {
         const displayName = user.full_name || user.username;
         newSocket.emit('register-user', displayName);
-        console.log('👤 User registered:', displayName);
       }
       
       // الانضمام إلى الغرفة
       newSocket.emit('join-room', ROOM);
       
-      // ✅ رسالة ترحيب
+      // رسالة ترحيب
       const welcomeMessage: Message = {
         user: 'system',
         text: '🔗 تم الاتصال بالدردشة',
@@ -82,7 +86,6 @@ const Chat: React.FC<Props> = ({ onClose }) => {
 
     // ✅ استقبال الرسائل
     newSocket.on('message', (message: Message) => {
-      console.log('📩 New message:', message);
       setMessages(prev => [...prev, message]);
     });
 
@@ -102,29 +105,28 @@ const Chat: React.FC<Props> = ({ onClose }) => {
 
     // ✅ قائمة المستخدمين المتصلين
     newSocket.on('online-users', (users: string[]) => {
-      console.log('👥 Online users:', users);
+      // يمكن استخدامها لعرض المستخدمين المتصلين
     });
 
     // ✅ معالج قطع الاتصال
     newSocket.on('disconnect', () => {
-      console.log('❌ Disconnected from chat server');
       setIsConnected(false);
     });
 
     // ✅ معالج أخطاء الاتصال
     newSocket.on('connect_error', (error) => {
-      console.error('❌ Connection error:', error);
       setIsConnected(false);
       setReconnectAttempts(prev => prev + 1);
       
-      if (reconnectAttempts >= MAX_RETRY_ATTEMPTS) {
+      if (error.message === 'Authentication required') {
+        toast.error('❌ يرجى تسجيل الدخول للدردشة');
+      } else if (reconnectAttempts >= MAX_RETRY_ATTEMPTS) {
         toast.error('❌ فشل الاتصال بالدردشة، يرجى المحاولة لاحقاً');
       }
     });
 
     // ✅ معالج الأخطاء العامة
     newSocket.on('error', (error) => {
-      console.error('❌ Socket error:', error);
       toast.error('❌ حدث خطأ في الدردشة');
     });
 
@@ -159,11 +161,9 @@ const Chat: React.FC<Props> = ({ onClose }) => {
       text: inputMessage.trim()
     };
 
-    console.log('📤 Sending message:', messageData);
     socket.emit('send-message', messageData);
     setInputMessage('');
     
-    // ✅ إيقاف مؤشر الكتابة
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -180,12 +180,10 @@ const Chat: React.FC<Props> = ({ onClose }) => {
 
     const displayName = user.full_name || user.username;
 
-    // ✅ بدء الكتابة
     if (!typingTimeoutRef.current) {
       socket.emit('typing', { room: ROOM, user: displayName, isTyping: true });
     }
 
-    // ✅ إعادة تعيين المؤقت
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
