@@ -11,8 +11,8 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// ✅ التحقق من الاتصال عند بدء التشغيل
-transporter.verify((error, success) => {
+// ✅ التحقق من الاتصال
+transporter.verify((error: Error | null, success: boolean) => {
   if (error) {
     logger.error('❌ Email transporter error:', error);
   } else {
@@ -36,7 +36,7 @@ export const sendEmail = async (
       html: html || text.replace(/\n/g, '<br>')
     });
     
-    logger.info(`📧 Email sent to ${to}: ${info.messageId}`);
+    logger.info(`📧 Email sent to ${to}`);
     return info;
   } catch (error) {
     logger.error('❌ Email send error:', error);
@@ -53,42 +53,10 @@ export const sendAlert = async (subject: string, message: string) => {
     return;
   }
   
-  const fullSubject = `🚨 [Alert] ${subject}`;
-  const fullMessage = `📅 Time: ${new Date().toISOString()}\n\n${message}`;
-  
-  await sendEmail(adminEmail, fullSubject, fullMessage);
-};
-
-// ✅ إرسال إشعار للمستخدم
-export const sendUserNotification = async (
-  email: string,
-  username: string,
-  subject: string,
-  message: string
-) => {
-  const fullSubject = `📋 ${subject}`;
-  const fullMessage = `مرحباً ${username},\n\n${message}\n\n--\nنظام متابعة المشتريات`;
-  
-  await sendEmail(email, fullSubject, fullMessage);
-};
-
-// ✅ إرسال إشعار تغيير الحالة
-export const sendStatusChangeNotification = async (
-  email: string,
-  username: string,
-  requestNumber: string,
-  oldStatus: string,
-  newStatus: string
-) => {
-  const subject = `تغيير حالة الطلب #${requestNumber}`;
-  const message = `مرحباً ${username},\n\nتم تغيير حالة الطلب رقم ${requestNumber}\nمن: ${oldStatus}\nإلى: ${newStatus}\n\n--\nنظام متابعة المشتريات`;
-  
-  await sendEmail(email, subject, message);
+  await sendEmail(adminEmail, `🚨 ${subject}`, message);
 };
 
 export default {
   sendEmail,
-  sendAlert,
-  sendUserNotification,
-  sendStatusChangeNotification
+  sendAlert
 };
