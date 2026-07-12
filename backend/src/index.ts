@@ -1,4 +1,4 @@
-// src/index.ts
+// backend/src/index.ts
 import './config/env.js';
 import express from 'express';
 import cors from 'cors';
@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import cookieParser from 'cookie-parser';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import helmet from 'helmet';
 import purchaseRoutes from './routes/purchase.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
@@ -14,6 +15,8 @@ import { authenticate } from './middleware/auth.middleware.js';
 import { setupSocketHandlers } from './sockets/index.js';
 import logger from './config/logger.js';
 import { authRateLimiter, registerRateLimiter } from './middleware/auth.middleware.js';
+import { globalLimiter, purchaseLimiter } from './middleware/rateLimiter.js';
+import { sanitizeInput } from './middleware/sanitize.js';
 
 // ============================================
 // 🔧 Load environment variables
@@ -25,11 +28,19 @@ dotenv.config();
 // 🚀 Server Configuration
 // ============================================
 
-const app = express();
+const app = express(); // ✅ تعريف app أولاً
 const PORT = parseInt(process.env.PORT || '5000', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
 const httpServer = createServer(app);
+
+// ============================================
+// 🛡️ Security Middleware - ✅ بعد تعريف app
+// ============================================
+
+app.use(helmet());
+app.use(globalLimiter);
+app.use(sanitizeInput);
 
 // ============================================
 // 💬 Socket.IO Setup with Authentication
@@ -48,13 +59,12 @@ const io = new Server(httpServer, {
 setupSocketHandlers(io);
 
 // ============================================
-// 🌐 CORS Configuration - ✅ مع إضافة Vercel
+// 🌐 CORS Configuration
 // ============================================
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  // ✅ إضافة روابط Vercel
   'https://purchase-tracking-system-fonf.vercel.app',
   'https://purchase-tracking-system-fonf-git-main-mutasimmos-projects.vercel.app',
   'https://purchase-tracking-system.vercel.app'
@@ -62,15 +72,11 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // ✅ السماح في التطوير
     if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
     
-    // ✅ السماح للطلبات بدون Origin (مثل Postman)
     if (!origin) return callback(null, true);
-    
-    // ✅ التحقق من السماح
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -79,7 +85,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  maxAge: 86400 // 24 hours
+  maxAge: 86400
 }));
 
 // ============================================
@@ -96,6 +102,7 @@ app.use(cookieParser());
 
 app.use('/api/auth/login', authRateLimiter);
 app.use('/api/auth/register', registerRateLimiter);
+app.use('/api/purchases', purchaseLimiter);
 
 // ============================================
 // 🗺️ Routes
@@ -123,11 +130,9 @@ app.get('/health', (req, res) => {
 // ============================================
 
 app.get('/stats', authenticate, (req, res) => {
-  // Only for admin users
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Insufficient permissions' });
   }
-  // Return statistics
   res.json({
     message: 'Stats endpoint - under development'
   });
@@ -171,16 +176,13 @@ const gracefulShutdown = async (signal: string) => {
   logger.info(`Received ${signal}, starting graceful shutdown...`);
   
   try {
-    // Close Socket.IO
     io.close(() => {
       logger.info('Socket.IO closed');
     });
     
-    // Close database connection
     await closeDB();
     logger.info('Database connection closed');
     
-    // Close HTTP server
     httpServer.close(() => {
       logger.info('HTTP server closed');
       process.exit(0);
@@ -204,7 +206,6 @@ process.on('unhandledRejection', (reason: Error, promise: Promise<any>) => {
     reason: reason.message,
     stack: reason.stack
   });
-  // Do not exit, just log
 });
 
 process.on('uncaughtException', (error: Error) => {
@@ -212,7 +213,6 @@ process.on('uncaughtException', (error: Error) => {
     error: error.message,
     stack: error.stack
   });
-  // In production, exit safely
   if (process.env.NODE_ENV === 'production') {
     process.exit(1);
   }
