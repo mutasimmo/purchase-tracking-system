@@ -16,10 +16,7 @@ const Filters: React.FC<Props> = ({
   initialFilters 
 }) => {
   const [searchTerm, setSearchTerm] = useState(initialFilters?.search || '');
-  // ✅ الحل النهائي: استخدام as any
-  const [status, setStatus] = useState<PurchaseStatus | ''>(
-    (initialFilters?.status as any) || ''
-  );
+  const [status, setStatus] = useState<PurchaseStatus | ''>((initialFilters?.status as any) || '');
   const [startDate, setStartDate] = useState(initialFilters?.startDate || '');
   const [endDate, setEndDate] = useState(initialFilters?.endDate || '');
   
@@ -31,6 +28,7 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
+    // ✅ إزالة التحقق !== ''
     if (status) {
       filters.status = status;
     }
@@ -52,6 +50,7 @@ const Filters: React.FC<Props> = ({
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
+    // ✅ إزالة التحقق !== ''
     if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
@@ -88,7 +87,6 @@ const Filters: React.FC<Props> = ({
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-3 md:p-4 mb-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3 items-end">
-        {/* بحث */}
         <div className="col-span-2 sm:col-span-1">
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-search text-purple-500"></i> بحث
@@ -113,7 +111,6 @@ const Filters: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* الحالة */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-tag text-purple-500"></i> الحالة
@@ -132,7 +129,6 @@ const Filters: React.FC<Props> = ({
           </select>
         </div>
 
-        {/* من تاريخ */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-calendar-alt text-purple-500"></i> من
@@ -146,7 +142,6 @@ const Filters: React.FC<Props> = ({
           />
         </div>
 
-        {/* إلى تاريخ */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-calendar-alt text-purple-500"></i> إلى
@@ -160,7 +155,6 @@ const Filters: React.FC<Props> = ({
           />
         </div>
 
-        {/* أزرار */}
         <div className="flex gap-1 md:gap-2">
           <button
             onClick={handleClear}
@@ -173,7 +167,6 @@ const Filters: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* عرض الفلترة النشطة */}
       {activeFiltersCount > 0 && (
         <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-200">
           <div className="flex flex-wrap items-center gap-1 md:gap-2">
