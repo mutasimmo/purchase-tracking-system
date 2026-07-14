@@ -23,6 +23,7 @@ const PurchaseForm: React.FC<Props> = ({
     request_number: '',
     date: new Date().toISOString().split('T')[0],
     requester: '',
+    invoice_owner: '',  // ✅ إضافة صاحب الفاتورة
     description: '',
     receiver: '',
     delivery_date: '',
@@ -43,6 +44,7 @@ const PurchaseForm: React.FC<Props> = ({
         request_number: purchase.request_number || '',
         date: purchase.date || new Date().toISOString().split('T')[0],
         requester: purchase.requester || '',
+        invoice_owner: purchase.invoice_owner || '',  // ✅ إضافة
         description: purchase.description || '',
         receiver: purchase.receiver || '',
         delivery_date: purchase.delivery_date || '',
@@ -75,6 +77,11 @@ const PurchaseForm: React.FC<Props> = ({
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
+    
+    // ✅ التحقق من invoice_owner (اختياري - يمكن تركه)
+    // if (!data.invoice_owner.trim()) {
+    //   errors.invoice_owner = 'صاحب الفاتورة مطلوب';
+    // }
     
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
@@ -122,13 +129,13 @@ const PurchaseForm: React.FC<Props> = ({
   };
 
   // ============================================
-  // ✅ معالج الإرسال - مع console.log للتصحيح
+  // ✅ معالج الإرسال
   // ============================================
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    console.log('📤 Form submitted');  // ✅ للتصحيح
+    console.log('📤 Form submitted');
     
     const allErrors = validateForm(formData);
     setErrors(allErrors);
@@ -154,7 +161,7 @@ const PurchaseForm: React.FC<Props> = ({
       notes: formData.notes || ''
     };
     
-    console.log('📤 Submitting data:', submitData);  // ✅ للتصحيح
+    console.log('📤 Submitting data:', submitData);
     onSubmit(submitData);
   };
 
@@ -265,6 +272,27 @@ const PurchaseForm: React.FC<Props> = ({
           />
           {errors.requester && touched.requester && (
             <p className="text-red-500 text-xs mt-1">{errors.requester}</p>
+          )}
+        </div>
+        
+        {/* ✅ صاحب الفاتورة (جديد) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            صاحب الفاتورة
+          </label>
+          <input
+            type="text"
+            name="invoice_owner"
+            value={formData.invoice_owner}
+            onChange={handleChange}
+            onBlur={handleBlur}
+            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+              errors.invoice_owner && touched.invoice_owner ? 'border-red-500' : 'border-gray-300'
+            }`}
+            placeholder="اسم صاحب الفاتورة"
+          />
+          {errors.invoice_owner && touched.invoice_owner && (
+            <p className="text-red-500 text-xs mt-1">{errors.invoice_owner}</p>
           )}
         </div>
         

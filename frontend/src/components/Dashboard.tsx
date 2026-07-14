@@ -332,6 +332,34 @@ const Dashboard: React.FC<Props> = ({ onClose }) => {
         </div>
       </div>
 
+      {/* ✅ إضافة أكثر أصحاب الفواتير */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-gray-50 rounded-2xl p-4 md:p-6">
+          <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm md:text-base">
+            <i className="fas fa-user text-purple-500"></i>
+            أكثر أصحاب الفواتير
+          </h3>
+          <div className="space-y-3">
+            {stats.byRequester.map((item, index) => (
+              <div key={index} className="flex items-center gap-3 bg-white rounded-xl px-3 py-2.5 shadow-sm hover:shadow-md transition-all">
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gradient-to-r ${requesterColors[index % requesterColors.length]}`}>
+                  {index + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="flex justify-between">
+                    <span className="font-medium text-gray-700 text-sm">{item.requester}</span>
+                    <span className="font-bold text-purple-600 text-sm">{item.count} طلب</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {stats.byRequester.length === 0 && (
+              <p className="text-gray-500 text-center py-4">لا توجد بيانات</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* الاتجاه الشهري */}
       <div className="mt-6 bg-gray-50 rounded-2xl p-4 md:p-6">
         <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2 text-sm md:text-base">

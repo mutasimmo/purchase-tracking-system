@@ -125,7 +125,7 @@ const PurchaseTable: React.FC<Props> = ({
   };
 
   // ============================================
-  // ✅ تصدير إلى Excel
+  // ✅ تصدير إلى Excel - ✅ إضافة invoice_owner
   // ============================================
 
   const exportToExcel = useCallback(() => {
@@ -139,6 +139,7 @@ const PurchaseTable: React.FC<Props> = ({
         'رقم الطلب': p.request_number,
         'التاريخ': new Date(p.date).toLocaleDateString('ar-SA'),
         'الجهة الطالبة': p.requester,
+        'صاحب الفاتورة': p.invoice_owner || '',  // ✅ إضافة
         'وصف الطلب': p.description,
         'المستلم': p.receiver,
         'تاريخ التسليم': new Date(p.delivery_date).toLocaleDateString('ar-SA'),
@@ -152,9 +153,9 @@ const PurchaseTable: React.FC<Props> = ({
       XLSX.utils.book_append_sheet(wb, ws, 'طلبات المشتريات');
       
       ws['!cols'] = [
-        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 30 },
-        { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 25 },
-        { wch: 15 }
+        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 },  // ✅ إضافة عمود
+        { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 12 },
+        { wch: 25 }, { wch: 15 }
       ];
 
       const fileName = `تقرير_المشتريات_${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.xlsx`;
@@ -167,7 +168,7 @@ const PurchaseTable: React.FC<Props> = ({
   }, [purchases]);
 
   // ============================================
-  // ✅ طباعة التقرير
+  // ✅ طباعة التقرير - ✅ إضافة invoice_owner
   // ============================================
 
   const handlePrintReport = useCallback(() => {
@@ -185,224 +186,47 @@ const PurchaseTable: React.FC<Props> = ({
         <title>تقرير طلبات المشتريات</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
         <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          body {
-            font-family: 'Cairo', 'Tajawal', sans-serif;
-            background: white;
-            padding: 20px 15px;
-            direction: rtl;
-          }
-
-          @page {
-            size: A4 landscape;
-            margin: 10mm 8mm 10mm 8mm;
-          }
-
-          .report-header {
-            text-align: center;
-            margin-bottom: 15px;
-            padding-bottom: 12px;
-            border-bottom: 3px solid #1a1a2e;
-          }
-
-          .report-header h1 {
-            font-size: 24px;
-            font-weight: 900;
-            color: #1a1a2e;
-            margin-bottom: 3px;
-          }
-
-          .report-header .subtitle {
-            font-size: 14px;
-            color: #666;
-            font-weight: 500;
-          }
-
-          .report-header .date-info {
-            font-size: 12px;
-            color: #999;
-            margin-top: 5px;
-          }
-
-          .report-header .total-info {
-            font-size: 13px;
-            color: #555;
-            margin-top: 3px;
-            font-weight: 600;
-          }
-
-          .report-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-            margin-top: 5px;
-          }
-
-          .report-table thead {
-            background: #1a1a2e;
-          }
-
-          .report-table thead th {
-            color: white;
-            padding: 8px 6px;
-            font-size: 10px;
-            font-weight: 700;
-            text-align: center;
-            border: 1px solid #1a1a2e;
-            letter-spacing: 0.3px;
-            white-space: nowrap;
-          }
-
-          .report-table tbody td {
-            padding: 6px 5px;
-            font-size: 10px;
-            text-align: center;
-            border: 1px solid #ddd;
-            color: #1a1a2e;
-            vertical-align: middle;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 120px;
-          }
-
-          .report-table tbody tr:nth-child(even) {
-            background-color: #f8f9fa;
-          }
-
-          .report-table tbody tr:hover {
-            background-color: #f0f0f0;
-          }
-
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Cairo', 'Tajawal', sans-serif; background: white; padding: 20px 15px; direction: rtl; }
+          @page { size: A4 landscape; margin: 10mm 8mm 10mm 8mm; }
+          .report-header { text-align: center; margin-bottom: 15px; padding-bottom: 12px; border-bottom: 3px solid #1a1a2e; }
+          .report-header h1 { font-size: 24px; font-weight: 900; color: #1a1a2e; margin-bottom: 3px; }
+          .report-header .subtitle { font-size: 14px; color: #666; font-weight: 500; }
+          .report-header .date-info { font-size: 12px; color: #999; margin-top: 5px; }
+          .report-header .total-info { font-size: 13px; color: #555; margin-top: 3px; font-weight: 600; }
+          .report-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
+          .report-table thead { background: #1a1a2e; }
+          .report-table thead th { color: white; padding: 8px 6px; font-size: 10px; font-weight: 700; text-align: center; border: 1px solid #1a1a2e; letter-spacing: 0.3px; white-space: nowrap; }
+          .report-table tbody td { padding: 6px 5px; font-size: 10px; text-align: center; border: 1px solid #ddd; color: #1a1a2e; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+          .report-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
+          .report-table tbody tr:hover { background-color: #f0f0f0; }
           .col-number { width: 30px; min-width: 30px; }
           .col-request { width: 70px; min-width: 70px; }
           .col-date { width: 75px; min-width: 75px; }
           .col-requester { width: 110px; min-width: 110px; }
+          .col-invoice-owner { width: 110px; min-width: 110px; }  // ✅ إضافة
           .col-description { width: 150px; min-width: 100px; max-width: 180px; }
           .col-receiver { width: 100px; min-width: 100px; }
           .col-delivery { width: 75px; min-width: 75px; }
           .col-notes { width: 100px; min-width: 80px; max-width: 140px; }
           .col-status { width: 85px; min-width: 85px; }
-
-          .report-status {
-            padding: 3px 10px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 700;
-            display: inline-block;
-            white-space: nowrap;
-          }
-
-          .report-status.completed {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-          }
-
-          .report-status.inprogress {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-          }
-
-          .report-status.pending {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-          }
-
-          .report-status.cancelled {
-            background: #e2e3e5;
-            color: #383d41;
-            border: 1px solid #d6d8db;
-          }
-
-          .overdue-text {
-            color: #dc3545;
-            font-weight: 700;
-          }
-
-          .overdue-badge {
-            background: #dc3545;
-            color: white;
-            font-size: 8px;
-            padding: 1px 5px;
-            border-radius: 3px;
-            margin-right: 3px;
-            display: inline-block;
-          }
-
-          .report-footer {
-            text-align: center;
-            font-size: 10px;
-            color: #999;
-            margin-top: 15px;
-            padding-top: 10px;
-            border-top: 1px solid #eee;
-          }
-
-          @media print {
-            body {
-              padding: 8px !important;
-              margin: 0 !important;
-            }
-            .report-header h1 {
-              font-size: 20px !important;
-            }
-            .report-header .subtitle {
-              font-size: 12px !important;
-            }
-            .report-table {
-              font-size: 9px !important;
-            }
-            .report-table thead th {
-              font-size: 8px !important;
-              padding: 5px 3px !important;
-            }
-            .report-table tbody td {
-              font-size: 8px !important;
-              padding: 4px 3px !important;
-            }
-            .report-status {
-              font-size: 8px !important;
-              padding: 2px 6px !important;
-            }
-            .no-print {
-              display: none !important;
-            }
-          }
-
-          @media screen and (max-width: 1024px) {
-            .report-table {
-              font-size: 10px !important;
-            }
-            .report-table thead th,
-            .report-table tbody td {
-              padding: 4px 3px !important;
-              font-size: 9px !important;
-            }
-            .report-header h1 {
-              font-size: 20px !important;
-            }
-          }
+          .report-status { padding: 3px 10px; border-radius: 4px; font-size: 9px; font-weight: 700; display: inline-block; white-space: nowrap; }
+          .report-status.completed { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+          .report-status.inprogress { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+          .report-status.pending { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+          .report-status.cancelled { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+          .overdue-text { color: #dc3545; font-weight: 700; }
+          .overdue-badge { background: #dc3545; color: white; font-size: 8px; padding: 1px 5px; border-radius: 3px; margin-right: 3px; display: inline-block; }
+          .report-footer { text-align: center; font-size: 10px; color: #999; margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee; }
+          @media print { body { padding: 8px !important; margin: 0 !important; } .report-header h1 { font-size: 20px !important; } .report-header .subtitle { font-size: 12px !important; } .report-table { font-size: 9px !important; } .report-table thead th { font-size: 8px !important; padding: 5px 3px !important; } .report-table tbody td { font-size: 8px !important; padding: 4px 3px !important; } .report-status { font-size: 8px !important; padding: 2px 6px !important; } .no-print { display: none !important; } }
+          @media screen and (max-width: 1024px) { .report-table { font-size: 10px !important; } .report-table thead th, .report-table tbody td { padding: 4px 3px !important; font-size: 9px !important; } .report-header h1 { font-size: 20px !important; } }
         </style>
       </head>
       <body>
         <div class="report-header">
           <h1>📋 تقرير طلبات المشتريات</h1>
           <div class="subtitle">نظام متابعة المشتريات</div>
-          <div class="date-info">📅 تاريخ الطباعة: ${new Date().toLocaleString('ar-SA', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}</div>
+          <div class="date-info">📅 تاريخ الطباعة: ${new Date().toLocaleString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
           <div class="total-info">📊 إجمالي الطلبات: <span style="color: #667eea; font-size: 16px;">${purchases.length}</span></div>
         </div>
 
@@ -413,6 +237,7 @@ const PurchaseTable: React.FC<Props> = ({
               <th class="col-request">رقم الطلب</th>
               <th class="col-date">التاريخ</th>
               <th class="col-requester">الجهة الطالبة</th>
+              <th class="col-invoice-owner">صاحب الفاتورة</th>  // ✅ إضافة
               <th class="col-description">وصف الطلب</th>
               <th class="col-receiver">المستلم</th>
               <th class="col-delivery">تاريخ التسليم</th>
@@ -423,50 +248,29 @@ const PurchaseTable: React.FC<Props> = ({
           <tbody>
             ${purchases.map((purchase, index) => {
               const status = purchase.status;
-              const statusClass = 
-                status === 'منجز' ? 'completed' :
-                status === 'قيد التنفيذ' ? 'inprogress' :
-                status === 'معلق' ? 'pending' :
-                'cancelled';
-              
+              const statusClass = status === 'منجز' ? 'completed' : status === 'قيد التنفيذ' ? 'inprogress' : status === 'معلق' ? 'pending' : 'cancelled';
               const isOverdueStatus = isOverdue(purchase);
               const deliveryDate = new Date(purchase.delivery_date).toLocaleDateString('ar-SA');
-              
               return `
                 <tr>
                   <td>${index + 1}</td>
                   <td><strong>${purchase.request_number}</strong></td>
                   <td>${new Date(purchase.date).toLocaleDateString('ar-SA')}</td>
                   <td style="text-align: right;">${purchase.requester}</td>
+                  <td style="text-align: right;">${purchase.invoice_owner || '-'}</td>  // ✅ إضافة
                   <td style="text-align: right; font-size: 9px;">${purchase.description || '-'}</td>
                   <td>${purchase.receiver}</td>
-                  <td>
-                    ${deliveryDate}
-                    ${isOverdueStatus ? '<span class="overdue-badge">⚠️</span>' : ''}
-                  </td>
+                  <td>${deliveryDate}${isOverdueStatus ? ' <span class="overdue-badge">⚠️</span>' : ''}</td>
                   <td style="text-align: right; font-size: 9px; color: #666;">${purchase.notes || '-'}</td>
-                  <td>
-                    <span class="report-status ${statusClass}">
-                      ${status}
-                    </span>
-                  </td>
+                  <td><span class="report-status ${statusClass}">${status}</span></td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
 
-        <div class="report-footer">
-          تم إنشاء هذا التقرير بواسطة نظام متابعة المشتريات | جميع الحقوق محفوظة © ${new Date().getFullYear()}
-        </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-            }, 500);
-          }
-        </script>
+        <div class="report-footer">تم إنشاء هذا التقرير بواسطة نظام متابعة المشتريات | جميع الحقوق محفوظة © ${new Date().getFullYear()}</div>
+        <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>
       </body>
       </html>
     `;
@@ -511,7 +315,7 @@ const PurchaseTable: React.FC<Props> = ({
   }
 
   // ============================================
-  // ✅ العرض الرئيسي
+  // ✅ العرض الرئيسي - ✅ إضافة عمود invoice_owner
   // ============================================
 
   return (
@@ -519,35 +323,21 @@ const PurchaseTable: React.FC<Props> = ({
       {/* ملخص وأزرار */}
       <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
         <div className="flex flex-wrap gap-3 p-3 bg-gray-50 rounded-xl">
-          <span className="text-sm text-gray-600">
-            📊 إجمالي: <strong>{purchases.length}</strong>
-          </span>
+          <span className="text-sm text-gray-600">📊 إجمالي: <strong>{purchases.length}</strong></span>
           {Object.entries(statusCounts).map(([status, count]) => (
-            <span key={status} className="text-sm text-gray-600">
-              {status}: <strong>{count}</strong>
-            </span>
+            <span key={status} className="text-sm text-gray-600">{status}: <strong>{count}</strong></span>
           ))}
           {overdueCount > 0 && (
-            <span className="text-sm text-red-600">
-              ⚠️ متأخر: <strong>{overdueCount}</strong>
-            </span>
+            <span className="text-sm text-red-600">⚠️ متأخر: <strong>{overdueCount}</strong></span>
           )}
         </div>
         
         <div className="flex gap-2 no-print">
-          <button
-            onClick={handlePrintReport}
-            className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm"
-          >
-            <i className="fas fa-print"></i>
-            <span className="hidden sm:inline">طباعة</span>
+          <button onClick={handlePrintReport} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm">
+            <i className="fas fa-print"></i><span className="hidden sm:inline">طباعة</span>
           </button>
-          <button
-            onClick={exportToExcel}
-            className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 text-sm"
-          >
-            <i className="fas fa-file-excel"></i>
-            <span className="hidden sm:inline">تصدير Excel</span>
+          <button onClick={exportToExcel} className="px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors flex items-center gap-2 text-sm">
+            <i className="fas fa-file-excel"></i><span className="hidden sm:inline">تصدير Excel</span>
           </button>
         </div>
       </div>
@@ -561,6 +351,7 @@ const PurchaseTable: React.FC<Props> = ({
               <th className="whitespace-nowrap">رقم الطلب</th>
               <th className="whitespace-nowrap">التاريخ</th>
               <th className="whitespace-nowrap hidden sm:table-cell">الجهة الطالبة</th>
+              <th className="whitespace-nowrap hidden sm:table-cell">صاحب الفاتورة</th>  // ✅ إضافة
               <th className="whitespace-nowrap hidden md:table-cell">وصف الطلب</th>
               <th className="whitespace-nowrap hidden lg:table-cell">المستلم</th>
               <th className="whitespace-nowrap hidden sm:table-cell">تاريخ التسليم</th>
@@ -571,17 +362,13 @@ const PurchaseTable: React.FC<Props> = ({
           </thead>
           <tbody>
             {purchases.map((purchase, index) => (
-              <tr 
-                key={purchase.id} 
-                className={`border-b hover:bg-gray-50 transition-colors ${getAlertClass(purchase)}`}
-              >
+              <tr key={purchase.id} className={`border-b hover:bg-gray-50 transition-colors ${getAlertClass(purchase)}`}>
                 <td className="text-center text-gray-500 text-xs md:text-sm">{index + 1}</td>
                 <td className="font-bold text-purple-700 text-sm md:text-lg">{purchase.request_number}</td>
                 <td className="text-xs md:text-sm">{new Date(purchase.date).toLocaleDateString('ar-SA')}</td>
                 <td className="font-medium text-xs md:text-sm hidden sm:table-cell">{purchase.requester}</td>
-                <td className="max-w-xs truncate text-xs md:text-sm hidden md:table-cell" title={purchase.description}>
-                  {purchase.description}
-                </td>
+                <td className="font-medium text-xs md:text-sm hidden sm:table-cell">{purchase.invoice_owner || '—'}</td>  // ✅ إضافة
+                <td className="max-w-xs truncate text-xs md:text-sm hidden md:table-cell" title={purchase.description}>{purchase.description}</td>
                 <td className="text-xs md:text-sm hidden lg:table-cell">{purchase.receiver}</td>
                 <td className="text-xs md:text-sm hidden sm:table-cell">
                   {new Date(purchase.delivery_date).toLocaleDateString('ar-SA')}
@@ -591,29 +378,16 @@ const PurchaseTable: React.FC<Props> = ({
                   {purchase.notes || '—'}
                 </td>
                 <td>
-                  {isOverdue(purchase) && (
-                    <span className="text-red-500 text-xs ml-1" title="متأخر">
-                      <i className="fas fa-exclamation-triangle"></i>
-                    </span>
-                  )}
-                  {/* ✅ قائمة منسدلة لتغيير الحالة */}
+                  {isOverdue(purchase) && (<span className="text-red-500 text-xs ml-1" title="متأخر"><i className="fas fa-exclamation-triangle"></i></span>)}
                   {renderStatus(purchase)}
                 </td>
                 <td className="no-print">
                   <div className="flex justify-center gap-1 md:gap-2">
-                    <button
-                      onClick={() => onEdit(purchase)}
-                      className="text-purple-600 hover:text-purple-800 font-semibold text-xs md:text-sm px-2 py-1 md:px-4 md:py-2 rounded-xl border-2 border-purple-200 hover:bg-purple-50 transition-all duration-300 flex items-center gap-1 md:gap-1.5"
-                    >
-                      <i className="fas fa-edit text-xs md:text-sm"></i>
-                      <span className="hidden sm:inline">تعديل</span>
+                    <button onClick={() => onEdit(purchase)} className="text-purple-600 hover:text-purple-800 font-semibold text-xs md:text-sm px-2 py-1 md:px-4 md:py-2 rounded-xl border-2 border-purple-200 hover:bg-purple-50 transition-all duration-300 flex items-center gap-1 md:gap-1.5">
+                      <i className="fas fa-edit text-xs md:text-sm"></i><span className="hidden sm:inline">تعديل</span>
                     </button>
-                    <button
-                      onClick={() => onDelete(purchase.id!)}
-                      className="text-red-600 hover:text-red-800 font-semibold text-xs md:text-sm px-2 py-1 md:px-4 md:py-2 rounded-xl border-2 border-red-200 hover:bg-red-50 transition-all duration-300 flex items-center gap-1 md:gap-1.5"
-                    >
-                      <i className="fas fa-trash-alt text-xs md:text-sm"></i>
-                      <span className="hidden sm:inline">حذف</span>
+                    <button onClick={() => onDelete(purchase.id!)} className="text-red-600 hover:text-red-800 font-semibold text-xs md:text-sm px-2 py-1 md:px-4 md:py-2 rounded-xl border-2 border-red-200 hover:bg-red-50 transition-all duration-300 flex items-center gap-1 md:gap-1.5">
+                      <i className="fas fa-trash-alt text-xs md:text-sm"></i><span className="hidden sm:inline">حذف</span>
                     </button>
                   </div>
                 </td>

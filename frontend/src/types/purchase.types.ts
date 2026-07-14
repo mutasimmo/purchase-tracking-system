@@ -11,6 +11,7 @@ export interface Purchase {
   request_number: string;
   date: string;
   requester: string;
+  invoice_owner?: string;  // ✅ إضافة صاحب الفاتورة
   description: string;
   receiver: string;
   delivery_date: string;
@@ -26,22 +27,23 @@ export interface Purchase {
 }
 
 // ============================================
-// ✅ الفلاتر - ✅ تم إزالة 'all'
+// ✅ الفلاتر
 // ============================================
 
 export interface PurchaseFilters {
-  status?: PurchaseStatus;  // ✅ إزالة 'all'
+  status?: PurchaseStatus;
   startDate?: string;
   endDate?: string;
   search?: string;
   page?: number;
   limit?: number;
-  sortBy?: 'created_at' | 'date' | 'delivery_date' | 'status' | 'requester' | 'request_number';
+  sortBy?: 'created_at' | 'date' | 'delivery_date' | 'status' | 'requester' | 'request_number' | 'invoice_owner';
   sortOrder?: 'ASC' | 'DESC';
   isOverdue?: boolean;
   isExpiring?: boolean;
   requester?: string;
   receiver?: string;
+  invoice_owner?: string;  // ✅ إضافة فلترة حسب صاحب الفاتورة
 }
 
 // ============================================

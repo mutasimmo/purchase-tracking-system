@@ -38,6 +38,10 @@ const validatePurchase = (data: any): PurchaseValidationResult => {
   if (!data.requester || data.requester.length < 1) {
     errors.push({ field: 'requester', message: 'Requester is required' });
   }
+  // ✅ إضافة التحقق من invoice_owner (اختياري)
+  // if (data.invoice_owner && data.invoice_owner.length < 1) {
+  //   errors.push({ field: 'invoice_owner', message: 'Invoice owner is required' });
+  // }
   if (!data.description || data.description.length < 1) {
     errors.push({ field: 'description', message: 'Description is required' });
   }
@@ -98,12 +102,12 @@ export const getAllPurchases = async (req: Request, res: Response) => {
     }
     
     if (search && search !== '') {
-      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
+      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR invoice_owner LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
       const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
-    const validSortColumns = ['created_at', 'date', 'delivery_date', 'status', 'requester', 'request_number'];
+    const validSortColumns = ['created_at', 'date', 'delivery_date', 'status', 'requester', 'request_number', 'invoice_owner'];
     const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy : 'created_at';
     const sortOrderValue = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -190,7 +194,7 @@ export const createPurchase = async (req: Request, res: Response) => {
   try {
     const db = await getDB();
     const user = (req as any).user;
-    const { request_number, date, requester, description, receiver, delivery_date, status, notes } = req.body;
+    const { request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes } = req.body; // ✅ إضافة invoice_owner
 
     const validation = validatePurchase(req.body);
     if (!validation.valid) {
@@ -210,12 +214,13 @@ export const createPurchase = async (req: Request, res: Response) => {
     }
 
     const result = await db.run(
-      `INSERT INTO purchases (request_number, date, requester, description, receiver, delivery_date, status, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO purchases (request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // ✅ إضافة invoice_owner
       [
         request_number, 
         date, 
         requester, 
+        invoice_owner || '', // ✅ إضافة
         description, 
         receiver, 
         delivery_date, 
@@ -272,7 +277,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     const db = await getDB();
     const user = (req as any).user;
     const { id } = req.params;
-    const { request_number, date, requester, description, receiver, delivery_date, status, notes } = req.body;
+    const { request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes } = req.body; // ✅ إضافة invoice_owner
 
     const existing = await db.get(
       'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
@@ -313,6 +318,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
     if (request_number) { updates.push('request_number = ?'); params.push(request_number); }
     if (date) { updates.push('date = ?'); params.push(date); }
     if (requester) { updates.push('requester = ?'); params.push(requester); }
+    if (invoice_owner !== undefined) { updates.push('invoice_owner = ?'); params.push(invoice_owner); } // ✅ إضافة
     if (description) { updates.push('description = ?'); params.push(description); }
     if (receiver) { updates.push('receiver = ?'); params.push(receiver); }
     if (delivery_date) { updates.push('delivery_date = ?'); params.push(delivery_date); }
@@ -541,9 +547,9 @@ export const searchPurchases = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (q && q !== '') {
-      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
+      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR invoice_owner LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
       const searchTerm = `%${q}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     if (status && status !== '' && status !== 'all') {
@@ -752,6 +758,8 @@ export const exportPurchases = async (req: Request, res: Response) => {
     });
   }
 };
+
+
 
 // ============================================
 // Overdue Purchases

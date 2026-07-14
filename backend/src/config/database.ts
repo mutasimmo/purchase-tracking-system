@@ -115,13 +115,14 @@ export const initDB = async () => {
       )
     `);
 
-    // 2. Purchases table
+    // 2. Purchases table - ✅ Added invoice_owner column
     await db.exec(`
       CREATE TABLE IF NOT EXISTS purchases (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         request_number TEXT UNIQUE NOT NULL,
         date TEXT NOT NULL,
         requester TEXT NOT NULL,
+        invoice_owner TEXT,  -- ✅ إضافة عمود صاحب الفاتورة
         description TEXT NOT NULL,
         receiver TEXT NOT NULL,
         delivery_date TEXT NOT NULL,
@@ -214,6 +215,7 @@ export const initDB = async () => {
       CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(date);
       CREATE INDEX IF NOT EXISTS idx_purchases_delivery_date ON purchases(delivery_date);
       CREATE INDEX IF NOT EXISTS idx_purchases_requester ON purchases(requester);
+      CREATE INDEX IF NOT EXISTS idx_purchases_invoice_owner ON purchases(invoice_owner); -- ✅ إضافة فهرس
 
       -- Audit log indexes
       CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
@@ -235,16 +237,16 @@ export const initDB = async () => {
     // 🔧 Check for existing columns (for upgrades)
     // ============================================
 
-    // ✅ Fixed: Added type 'any' to 'col' parameter
     const tableInfo = await db.all("PRAGMA table_info(purchases)");
+    
+    // Check for notes column
     const hasNotes = tableInfo.some((col: any) => col.name === 'notes');
-
     if (!hasNotes) {
       await db.exec('ALTER TABLE purchases ADD COLUMN notes TEXT');
       console.log('✅ Added notes column to purchases table');
     }
 
-    // ✅ Fixed: Added type 'any' to 'col' parameter
+    // Check for deleted_at column
     const hasDeletedAt = tableInfo.some((col: any) => col.name === 'deleted_at');
     if (!hasDeletedAt) {
       await db.exec('ALTER TABLE purchases ADD COLUMN deleted_at TEXT');
@@ -256,6 +258,13 @@ export const initDB = async () => {
     if (!hasPriority) {
       await db.exec('ALTER TABLE purchases ADD COLUMN priority TEXT DEFAULT "medium"');
       console.log('✅ Added priority column to purchases table');
+    }
+
+    // ✅ Check for invoice_owner column
+    const hasInvoiceOwner = tableInfo.some((col: any) => col.name === 'invoice_owner');
+    if (!hasInvoiceOwner) {
+      await db.exec('ALTER TABLE purchases ADD COLUMN invoice_owner TEXT');
+      console.log('✅ Added invoice_owner column to purchases table');
     }
 
     // ============================================

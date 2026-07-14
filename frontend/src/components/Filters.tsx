@@ -19,6 +19,7 @@ const Filters: React.FC<Props> = ({
   const [status, setStatus] = useState<PurchaseStatus | ''>((initialFilters?.status as any) || '');
   const [startDate, setStartDate] = useState(initialFilters?.startDate || '');
   const [endDate, setEndDate] = useState(initialFilters?.endDate || '');
+  const [invoiceOwner, setInvoiceOwner] = useState(initialFilters?.invoice_owner || ''); // ✅ إضافة
   
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -28,13 +29,13 @@ const Filters: React.FC<Props> = ({
     }
 
     const filters: PurchaseFilters = {};
-    // ✅ لا يوجد !== '' هنا
     if (status) {
       filters.status = status;
     }
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (searchTerm) filters.search = searchTerm;
+    if (invoiceOwner) filters.invoice_owner = invoiceOwner; // ✅ إضافة
 
     searchTimeoutRef.current = setTimeout(() => {
       onFilterChange(filters);
@@ -45,21 +46,21 @@ const Filters: React.FC<Props> = ({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [status, startDate, endDate, searchTerm, onFilterChange]);
+  }, [status, startDate, endDate, searchTerm, invoiceOwner, onFilterChange]); // ✅ إضافة invoiceOwner
 
   const handleSearch = useCallback(() => {
     onSearch(searchTerm);
     const filters: PurchaseFilters = {};
-    // ✅ لا يوجد !== '' هنا
     if (status) filters.status = status;
     if (startDate) filters.startDate = startDate;
     if (endDate) filters.endDate = endDate;
     if (searchTerm) filters.search = searchTerm;
+    if (invoiceOwner) filters.invoice_owner = invoiceOwner; // ✅ إضافة
     onFilterChange(filters);
-  }, [searchTerm, status, startDate, endDate, onSearch, onFilterChange]);
+  }, [searchTerm, status, startDate, endDate, invoiceOwner, onSearch, onFilterChange]);
 
   const handleClear = useCallback(() => {
-    const activeFilters = [searchTerm, status, startDate, endDate].filter(Boolean).length;
+    const activeFilters = [searchTerm, status, startDate, endDate, invoiceOwner].filter(Boolean).length; // ✅ إضافة invoiceOwner
     
     if (activeFilters > 0) {
       if (!window.confirm('هل أنت متأكد من مسح جميع الفلاتر؟')) {
@@ -71,9 +72,10 @@ const Filters: React.FC<Props> = ({
     setStatus('');
     setStartDate('');
     setEndDate('');
+    setInvoiceOwner(''); // ✅ إضافة
     onFilterChange({});
     onSearch('');
-  }, [searchTerm, status, startDate, endDate, onFilterChange, onSearch]);
+  }, [searchTerm, status, startDate, endDate, invoiceOwner, onFilterChange, onSearch]);
 
   const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -82,11 +84,12 @@ const Filters: React.FC<Props> = ({
   }, [handleSearch]);
 
   const statusOptions: (PurchaseStatus | '')[] = ['', 'قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
-  const activeFiltersCount = [searchTerm, status, startDate, endDate].filter(Boolean).length;
+  const activeFiltersCount = [searchTerm, status, startDate, endDate, invoiceOwner].filter(Boolean).length; // ✅ إضافة invoiceOwner
 
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-3 md:p-4 mb-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3 items-end">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3 items-end"> {/* ✅ تغيير من 5 إلى 6 */}
+        {/* بحث */}
         <div className="col-span-2 sm:col-span-1">
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-search text-purple-500"></i> بحث
@@ -111,6 +114,7 @@ const Filters: React.FC<Props> = ({
           </div>
         </div>
 
+        {/* الحالة */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-tag text-purple-500"></i> الحالة
@@ -129,6 +133,22 @@ const Filters: React.FC<Props> = ({
           </select>
         </div>
 
+        {/* صاحب الفاتورة - ✅ إضافة */}
+        <div>
+          <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+            <i className="fas fa-user text-purple-500"></i> صاحب الفاتورة
+          </label>
+          <input
+            type="text"
+            value={invoiceOwner}
+            onChange={(e) => setInvoiceOwner(e.target.value)}
+            placeholder="بحث بصاحب الفاتورة..."
+            className="w-full border border-gray-300 rounded-lg px-2 py-1.5 md:px-4 md:py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-xs md:text-sm"
+            disabled={loading}
+          />
+        </div>
+
+        {/* من تاريخ */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-calendar-alt text-purple-500"></i> من
@@ -142,6 +162,7 @@ const Filters: React.FC<Props> = ({
           />
         </div>
 
+        {/* إلى تاريخ */}
         <div>
           <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
             <i className="fas fa-calendar-alt text-purple-500"></i> إلى
@@ -155,6 +176,7 @@ const Filters: React.FC<Props> = ({
           />
         </div>
 
+        {/* أزرار */}
         <div className="flex gap-1 md:gap-2">
           <button
             onClick={handleClear}
@@ -167,6 +189,7 @@ const Filters: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* عرض الفلترة النشطة */}
       {activeFiltersCount > 0 && (
         <div className="mt-2 md:mt-3 pt-2 md:pt-3 border-t border-gray-200">
           <div className="flex flex-wrap items-center gap-1 md:gap-2">
@@ -182,6 +205,11 @@ const Filters: React.FC<Props> = ({
             {status && (
               <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 md:py-1 rounded-full">
                 {status}
+              </span>
+            )}
+            {invoiceOwner && (
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 md:py-1 rounded-full">
+                صاحب الفاتورة: {invoiceOwner}
               </span>
             )}
             {startDate && (
