@@ -158,6 +158,29 @@ const AppContent = () => {
   }, []);
 
   // ============================================
+  // ✅ تحديث رقم الطلب التالي
+  // ============================================
+
+  const updateNextRequestNumber = useCallback(async () => {
+    try {
+      const filterParams: PurchaseFilters = {
+        page: filters.page || 1,
+        limit: filters.limit || 10
+      };
+      if (filters.status) filterParams.status = filters.status;
+      if (filters.startDate) filterParams.startDate = filters.startDate;
+      if (filters.endDate) filterParams.endDate = filters.endDate;
+      if (filters.search) filterParams.search = filters.search;
+      
+      const response = await purchaseApi.getAll(filterParams);
+      const nextNum = generateNextRequestNumber(response.data);
+      setNextRequestNumber(nextNum);
+    } catch (error) {
+      console.error('Error updating next request number:', error);
+    }
+  }, [filters, generateNextRequestNumber]);
+
+  // ============================================
   // ✅ دوال CRUD
   // ============================================
 
@@ -198,13 +221,14 @@ const AppContent = () => {
       setShowDeleteModal(false);
       setDeleteId(null);
       await refreshPurchases();
+      await updateNextRequestNumber(); // ✅ تحديث الرقم بعد الحذف
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || '❌ حدث خطأ في حذف الطلب';
       toast.error(errorMessage);
     } finally {
       setDeleting(false);
     }
-  }, [deleteId, refreshPurchases]);
+  }, [deleteId, refreshPurchases, updateNextRequestNumber]);
 
   const handleSubmit = useCallback(async (data: any) => {
     try {
@@ -215,6 +239,9 @@ const AppContent = () => {
       } else {
         await purchaseApi.create(data);
         toast.success('✅ تم إضافة الطلب بنجاح');
+        
+        // ✅ تحديث رقم الطلب التالي بعد الإضافة
+        await updateNextRequestNumber();
       }
       setShowForm(false);
       setEditingPurchase(null);
@@ -225,7 +252,7 @@ const AppContent = () => {
     } finally {
       setFormLoading(false);
     }
-  }, [editingPurchase, refreshPurchases]);
+  }, [editingPurchase, refreshPurchases, updateNextRequestNumber]);
 
   // ============================================
   // ✅ دوال البحث والفلترة
