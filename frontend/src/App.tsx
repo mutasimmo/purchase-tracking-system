@@ -58,14 +58,39 @@ const AppContent = () => {
   // ============================================
 
   const generateNextRequestNumber = useCallback((existingPurchases: Purchase[]) => {
-    if (existingPurchases.length === 0) return '001';
+    if (!existingPurchases || existingPurchases.length === 0) return '001';
+    
     const numbers = existingPurchases
       .map(p => parseInt(p.request_number))
-      .filter(n => !isNaN(n));
+      .filter(n => !isNaN(n) && n > 0);
+    
     if (numbers.length === 0) return '001';
+    
     const maxNumber = Math.max(...numbers);
-    return String(maxNumber + 1).padStart(3, '0');
+    const nextNumber = maxNumber + 1;
+    
+    return String(nextNumber).padStart(3, '0');
   }, []);
+
+  // ============================================
+  // ✅ تحديث رقم الطلب التالي
+  // ============================================
+
+  const updateNextRequestNumber = useCallback(async () => {
+    try {
+      const response = await purchaseApi.getAll({
+        page: 1,
+        limit: 1000 // جلب أكبر عدد ممكن
+      });
+      
+      const nextNum = generateNextRequestNumber(response.data);
+      setNextRequestNumber(nextNum);
+      
+      console.log('📝 Next request number updated to:', nextNum);
+    } catch (error) {
+      console.error('Error updating next request number:', error);
+    }
+  }, [generateNextRequestNumber]);
 
   // ============================================
   // ✅ جلب الطلبات
@@ -92,7 +117,12 @@ const AppContent = () => {
       setTotalPages(response.totalPages);
       setCurrentPage(response.page);
       
-      const nextNum = generateNextRequestNumber(response.data);
+      // ✅ تحديث الرقم التالي من جميع الطلبات
+      const allResponse = await purchaseApi.getAll({
+        page: 1,
+        limit: 1000
+      });
+      const nextNum = generateNextRequestNumber(allResponse.data);
       setNextRequestNumber(nextNum);
     } catch (err: any) {
       if (err.response?.status === 401) {
@@ -109,7 +139,8 @@ const AppContent = () => {
 
   useEffect(() => {
     loadPurchases();
-  }, [loadPurchases]);
+    updateNextRequestNumber();
+  }, [loadPurchases, updateNextRequestNumber]);
 
   // ============================================
   // ✅ تحديث البيانات بدون إعادة تحميل الصفحة
@@ -158,29 +189,6 @@ const AppContent = () => {
   }, []);
 
   // ============================================
-  // ✅ تحديث رقم الطلب التالي
-  // ============================================
-
-  const updateNextRequestNumber = useCallback(async () => {
-    try {
-      const filterParams: PurchaseFilters = {
-        page: filters.page || 1,
-        limit: filters.limit || 10
-      };
-      if (filters.status) filterParams.status = filters.status;
-      if (filters.startDate) filterParams.startDate = filters.startDate;
-      if (filters.endDate) filterParams.endDate = filters.endDate;
-      if (filters.search) filterParams.search = filters.search;
-      
-      const response = await purchaseApi.getAll(filterParams);
-      const nextNum = generateNextRequestNumber(response.data);
-      setNextRequestNumber(nextNum);
-    } catch (error) {
-      console.error('Error updating next request number:', error);
-    }
-  }, [filters, generateNextRequestNumber]);
-
-  // ============================================
   // ✅ دوال CRUD
   // ============================================
 
@@ -221,7 +229,7 @@ const AppContent = () => {
       setShowDeleteModal(false);
       setDeleteId(null);
       await refreshPurchases();
-      await updateNextRequestNumber(); // ✅ تحديث الرقم بعد الحذف
+      await updateNextRequestNumber();
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || '❌ حدث خطأ في حذف الطلب';
       toast.error(errorMessage);
