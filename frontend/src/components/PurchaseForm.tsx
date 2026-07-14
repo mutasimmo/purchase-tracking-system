@@ -23,7 +23,7 @@ const PurchaseForm: React.FC<Props> = ({
     request_number: '',
     date: new Date().toISOString().split('T')[0],
     requester: '',
-    invoice_owner: '',  // ✅ إضافة صاحب الفاتورة
+    invoice_owner: '',
     description: '',
     receiver: '',
     delivery_date: '',
@@ -33,6 +33,24 @@ const PurchaseForm: React.FC<Props> = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const isEditing = !!purchase;
+
+  // ============================================
+  // ✅ تحديث الفورم عند تغيير nextRequestNumber (الإضافة الجديدة)
+  // ============================================
+
+  useEffect(() => {
+    if (!isEditing && nextRequestNumber) {
+      setFormData(prev => ({
+        ...prev,
+        request_number: nextRequestNumber
+      }));
+      // ✅ مسح أي خطأ في رقم الطلب
+      if (errors.request_number) {
+        setErrors(prev => ({ ...prev, request_number: '' }));
+      }
+    }
+  }, [nextRequestNumber, isEditing]);
 
   // ============================================
   // ✅ تحميل البيانات للتعديل
@@ -44,14 +62,14 @@ const PurchaseForm: React.FC<Props> = ({
         request_number: purchase.request_number || '',
         date: purchase.date || new Date().toISOString().split('T')[0],
         requester: purchase.requester || '',
-        invoice_owner: purchase.invoice_owner || '',  // ✅ إضافة
+        invoice_owner: purchase.invoice_owner || '',
         description: purchase.description || '',
         receiver: purchase.receiver || '',
         delivery_date: purchase.delivery_date || '',
         status: purchase.status || 'قيد التنفيذ',
         notes: purchase.notes || ''
       });
-    } else if (nextRequestNumber) {
+    } else if (nextRequestNumber && !formData.request_number) {
       setFormData(prev => ({
         ...prev,
         request_number: nextRequestNumber
@@ -77,11 +95,6 @@ const PurchaseForm: React.FC<Props> = ({
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
-    
-    // ✅ التحقق من invoice_owner (اختياري - يمكن تركه)
-    // if (!data.invoice_owner.trim()) {
-    //   errors.invoice_owner = 'صاحب الفاتورة مطلوب';
-    // }
     
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
@@ -180,7 +193,6 @@ const PurchaseForm: React.FC<Props> = ({
   // ============================================
 
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
-  const isEditing = !!purchase;
 
   // ============================================
   // ✅ Render
@@ -275,7 +287,7 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
-        {/* ✅ صاحب الفاتورة (جديد) */}
+        {/* صاحب الفاتورة */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             صاحب الفاتورة

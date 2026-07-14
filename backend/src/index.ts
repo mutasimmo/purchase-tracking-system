@@ -14,6 +14,8 @@ import { authenticate } from './middleware/auth.middleware.js';
 import { setupSocketHandlers } from './sockets/index.js';
 import logger from './config/logger.js';
 import { authRateLimiter, registerRateLimiter } from './middleware/auth.middleware.js';
+import { runMigrations } from './migrations/index.js';
+import { scheduleBackup, createBackup } from './utils/backup.js';
 
 dotenv.config();
 
@@ -89,11 +91,29 @@ app.get('/stats', authenticate, (req, res) => {
 app.use(notFoundHandler);
 app.use(errorHandler);
 
+// ============================================
+// 🚀 Start Server with Migrations and Backup
+// ============================================
+
 const startServer = async () => {
   try {
+    // ✅ Initialize database
     await initDB();
     logger.info('✅ Database initialized successfully');
     
+    // ✅ Run migrations
+    await runMigrations();
+    logger.info('✅ Migrations completed successfully');
+    
+    // ✅ Create initial backup
+    await createBackup();
+    logger.info('✅ Initial backup created');
+    
+    // ✅ Schedule automatic backups
+    scheduleBackup();
+    logger.info('✅ Backup scheduler started');
+    
+    // ✅ Start HTTP server
     httpServer.listen(PORT, HOST, () => {
       logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
       logger.info(`📊 API endpoint: http://${HOST}:${PORT}/api/purchases`);
@@ -108,13 +128,31 @@ const startServer = async () => {
   }
 };
 
+// ============================================
+// 🛑 Graceful Shutdown
+// ============================================
+
 const gracefulShutdown = async (signal: string) => {
   logger.info(`Received ${signal}, starting graceful shutdown...`);
   try {
-    io.close(() => { logger.info('Socket.IO closed'); });
+    // Close Socket.IO
+    io.close(() => { 
+      logger.info('Socket.IO closed'); 
+    });
+    
+    // Close database connection
     await closeDB();
     logger.info('Database connection closed');
-    httpServer.close(() => { logger.info('HTTP server closed'); process.exit(0); });
+    
+    // Create final backup before shutdown
+    await createBackup();
+    logger.info('✅ Final backup created');
+    
+    // Close HTTP server
+    httpServer.close(() => { 
+      logger.info('HTTP server closed'); 
+      process.exit(0); 
+    });
   } catch (error) {
     logger.error('Error during graceful shutdown:', error);
     process.exit(1);
@@ -124,14 +162,31 @@ const gracefulShutdown = async (signal: string) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
+// ============================================
+// ❌ Handle Unhandled Errors
+// ============================================
+
 process.on('unhandledRejection', (reason: Error, promise: Promise<any>) => {
-  logger.error('Unhandled Rejection at:', { promise, reason: reason.message });
+  logger.error('Unhandled Rejection at:', { 
+    promise, 
+    reason: reason.message,
+    stack: reason.stack 
+  });
 });
 
 process.on('uncaughtException', (error: Error) => {
-  logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
-  if (process.env.NODE_ENV === 'production') process.exit(1);
+  logger.error('Uncaught Exception:', { 
+    error: error.message, 
+    stack: error.stack 
+  });
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });
+
+// ============================================
+// 🚀 Start the Server
+// ============================================
 
 startServer();
 

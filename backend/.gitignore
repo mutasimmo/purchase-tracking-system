@@ -1,52 +1,146 @@
-# Dependencies
+# ============================================
+# 📦 Dependencies
+# ============================================
 node_modules/
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
 
-# Build
+# ============================================
+# 📁 Build
+# ============================================
 dist/
 build/
 *.tsbuildinfo
+*.js.map
+*.d.ts.map
 
-# Environment
+# ============================================
+# 🔐 Environment
+# ============================================
 .env
 .env.local
 .env.production
+.env.development
+.env.test
+.env.*.local
 
-# Database
+# ============================================
+# 🗄️ Database
+# ============================================
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 
-# Logs
+# ============================================
+# 📝 Logs
+# ============================================
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# OS
+# ============================================
+# 💾 Backups
+# ============================================
+backups/
+*.bak
+*.backup
+*.old
+
+# ============================================
+# 🖥️ OS
+# ============================================
 .DS_Store
 Thumbs.db
+*.exe
+*.dll
+*.so
+*.dylib
 
-# IDE
+# ============================================
+# 🛠️ IDE
+# ============================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+*.sublime-*
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
 
-# Backup
-backups/
-*.bak
-
-# Testing
+# ============================================
+# 🧪 Testing
+# ============================================
 coverage/
 .nyc_output/
+*.test.js
+*.spec.js
+*.test.ts
+*.spec.ts
+**/__tests__/
+**/__mocks__/
 
-# Misc
+# ============================================
+# 📊 Misc
+# ============================================
 *.tmp
 *.temp
+*.cache
+*.tsbuildinfo
+.next/
+.out/
+.nuxt/
+.cache/
+.vercel/
+.netlify/
+
+# ============================================
+# 🔒 Security
+# ============================================
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+*.secret
+*.secrets
+
+# ============================================
+# 🐳 Docker
+# ============================================
+*.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+.docker/
+
+# ============================================
+# 📦 Package Managers
+# ============================================
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# ============================================
+# 🚀 Deployment
+# ============================================
+.vercel/
+.netlify/
+.render/
+.railway/
+.heroku/
