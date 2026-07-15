@@ -108,7 +108,7 @@ export const UserRepository = {
       }
 
       // Check if email exists
-      if (userData.email) {
+      if (userData.email && userData.email.trim() !== '') {
         const existingEmail = await UserRepository.findByEmail(userData.email);
         if (existingEmail) {
           throw new ConflictError('Email already exists');
@@ -123,7 +123,7 @@ export const UserRepository = {
           username: userData.username,
           password: hashedPassword,
           full_name: userData.full_name,
-          email: userData.email || null,
+          email: userData.email && userData.email.trim() !== '' ? userData.email.trim() : null,
           role: userData.role || 'user',
           is_active: 1
         })
@@ -138,7 +138,7 @@ export const UserRepository = {
     }
   },
 
-  // ✅ Update user
+  // ✅ Update user (مع دعم البريد الإلكتروني الفارغ)
   update: async (id: number, updates: UserUpdate): Promise<User> => {
     try {
       const supabase = getSupabase();
@@ -148,12 +148,12 @@ export const UserRepository = {
         throw new NotFoundError('User not found');
       }
 
-      // Check email uniqueness
-      if (updates.email) {
+      // ✅ التحقق من البريد الإلكتروني فقط إذا كان موجوداً وغير فارغ
+      if (updates.email && updates.email.trim() !== '') {
         const existingEmail = await supabase
           .from('users')
           .select('id')
-          .eq('email', updates.email)
+          .eq('email', updates.email.trim())
           .neq('id', id)
           .is('deleted_at', null)
           .maybeSingle();
@@ -168,7 +168,12 @@ export const UserRepository = {
       };
 
       if (updates.full_name) updateData.full_name = updates.full_name;
-      if (updates.email !== undefined) updateData.email = updates.email || null;
+      
+      // ✅ معالجة البريد الإلكتروني
+      if (updates.email !== undefined) {
+        updateData.email = updates.email && updates.email.trim() !== '' ? updates.email.trim() : null;
+      }
+      
       if (updates.role) updateData.role = updates.role;
       if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
       
