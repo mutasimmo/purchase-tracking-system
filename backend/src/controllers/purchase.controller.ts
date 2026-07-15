@@ -456,7 +456,7 @@ export const searchPurchases = async (req: Request, res: Response) => {
 };
 
 // ============================================
-// Update Purchase Status
+// Update Purchase Status (✅ Fixed for Supabase)
 // ============================================
 
 export const updateStatus = async (req: Request, res: Response) => {
@@ -471,11 +471,13 @@ export const updateStatus = async (req: Request, res: Response) => {
       throw new ValidationError('Invalid status', [`Status must be one of: ${validStatuses.join(', ')}`]);
     }
 
+    // ✅ استخدام Supabase عبر PurchaseRepository
     const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
       throw new NotFoundError('Purchase not found');
     }
 
+    // ✅ التحقق من الصلاحيات
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'manager') {
       throw new AuthorizationError('Only admins and managers can change status');
     }
@@ -484,10 +486,12 @@ export const updateStatus = async (req: Request, res: Response) => {
       throw new AuthorizationError('You can only change status of your own purchases');
     }
 
-    if (existing.status === 'منجز' || existing.status === 'ملغي') {
-      throw new ValidationError('Cannot change status of completed or cancelled purchases');
-    }
+    // ✅ إزالة الشرط للسماح بتغيير جميع الحالات (منجز ← قيد التنفيذ وغيرها)
+    // if (existing.status === 'منجز' || existing.status === 'ملغي') {
+    //   throw new ValidationError('Cannot change status of completed or cancelled purchases');
+    // }
 
+    // ✅ تحديث الحالة باستخدام PurchaseRepository
     const updated = await PurchaseRepository.updateStatus(purchaseId, status);
 
     await logActivity(
