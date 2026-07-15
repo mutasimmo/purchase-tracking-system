@@ -69,6 +69,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // ============================================
 
   if (!isAuthenticated) {
+    console.log('🔒 Not authenticated, redirecting to:', redirectTo);
     return <Navigate to={redirectTo} replace />;
   }
 
@@ -77,7 +78,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // ============================================
 
   if (!hasAccess) {
-    // ✅ استخدام fallback مخصص إذا تم توفيره
     if (fallback) {
       return <>{fallback}</>;
     }
@@ -110,10 +110,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       </div>
     );
   }
-
-  // ============================================
-  // ✅ عرض المحتوى
-  // ============================================
 
   return <>{children}</>;
 };
