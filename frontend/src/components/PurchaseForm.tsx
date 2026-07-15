@@ -287,7 +287,7 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
-        {/* صاحب الفاتورة */}
+        {/* ✅ صاحب الفاتورة */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             صاحب الفاتورة
