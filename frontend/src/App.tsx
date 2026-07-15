@@ -185,27 +185,32 @@ const AppContent = () => {
   }, []);
 
   // ============================================
-  // ✅ دوال CRUD
+  // ✅ دوال CRUD (✅ تم تعديلها للسماح لـ User)
   // ============================================
 
+  // ✅ إضافة طلب - يسمح لـ Admin, Manager, User
   const handleAdd = useCallback(() => {
-    if (!isUserAdmin) {
+    const allowedRoles = ['admin', 'super_admin', 'manager', 'user'];
+    if (!user || !allowedRoles.includes(user.role)) {
       toast.error('❌ ليس لديك صلاحية لإضافة طلبات');
       return;
     }
     setEditingPurchase(null);
     setShowForm(true);
-  }, [isUserAdmin]);
+  }, [user]);
 
+  // ✅ تعديل طلب - يسمح لـ Admin, Manager فقط
   const handleEdit = useCallback((purchase: Purchase) => {
-    if (!isUserAdmin) {
+    const allowedRoles = ['admin', 'super_admin', 'manager'];
+    if (!user || !allowedRoles.includes(user.role)) {
       toast.error('❌ ليس لديك صلاحية لتعديل الطلبات');
       return;
     }
     setEditingPurchase(purchase);
     setShowForm(true);
-  }, [isUserAdmin]);
+  }, [user]);
 
+  // ✅ حذف طلب - للأدمن فقط
   const handleDeleteClick = useCallback((id: number) => {
     if (!isUserAdmin) {
       toast.error('❌ ليس لديك صلاحية لحذف الطلبات');
