@@ -108,7 +108,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       const response = await authApi.login(username, password);
       
-      if (response.success && response.user) {
+      // ✅ طباعة الرد للتأكد
+      console.log('📥 Login response:', response);
+      
+      // ✅ التحقق من وجود token في الرد
+      if (response.token && response.user) {
         setUser(response.user);
         localStorage.setItem('user', JSON.stringify(response.user));
         localStorage.setItem('token', response.token);
@@ -116,12 +120,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           localStorage.setItem('refreshToken', response.refreshToken);
         }
         
+        console.log('✅ Token saved:', localStorage.getItem('token'));
         toast.success(`مرحباً ${response.user.full_name}!`);
         return true;
       }
+      
+      // ✅ إذا كان الرد داخل response.data
+      if (response.data?.token && response.data?.user) {
+        setUser(response.data.user);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        localStorage.setItem('token', response.data.token);
+        if (response.data.refreshToken) {
+          localStorage.setItem('refreshToken', response.data.refreshToken);
+        }
+        console.log('✅ Token saved from response.data:', localStorage.getItem('token'));
+        toast.success(`مرحباً ${response.data.user.full_name}!`);
+        return true;
+      }
+      
+      // ✅ إذا كان الرد يحتوي على success
+      if (response.success && response.token && response.user) {
+        setUser(response.user);
+        localStorage.setItem('user', JSON.stringify(response.user));
+        localStorage.setItem('token', response.token);
+        if (response.refreshToken) {
+          localStorage.setItem('refreshToken', response.refreshToken);
+        }
+        console.log('✅ Token saved from success response:', localStorage.getItem('token'));
+        toast.success(`مرحباً ${response.user.full_name}!`);
+        return true;
+      }
+      
+      console.error('❌ No token in response:', response);
+      toast.error('فشل تسجيل الدخول: لم يتم استلام التوكن');
       return false;
     } catch (error: any) {
-      const message = error.response?.data?.error || 'فشل تسجيل الدخول';
+      console.error('❌ Login error:', error);
+      const message = error.response?.data?.error || error.message || 'فشل تسجيل الدخول';
       toast.error(message);
       return false;
     } finally {
@@ -233,3 +268,5 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+export default AuthContext;
