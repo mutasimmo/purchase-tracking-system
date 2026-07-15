@@ -1,4 +1,4 @@
-// src/components/PurchaseForm.tsx
+// frontend/src/components/PurchaseForm.tsx
 import { useState, useEffect, useMemo } from 'react';
 import type { Purchase } from '../types/purchase.types';
 
@@ -23,7 +23,7 @@ const PurchaseForm: React.FC<Props> = ({
     request_number: '',
     date: new Date().toISOString().split('T')[0],
     requester: '',
-    invoice_owner: '',
+    invoice_owner: '',  // ✅ إضافة صاحب الفاتورة
     description: '',
     receiver: '',
     delivery_date: '',
@@ -62,7 +62,7 @@ const PurchaseForm: React.FC<Props> = ({
         request_number: purchase.request_number || '',
         date: purchase.date || new Date().toISOString().split('T')[0],
         requester: purchase.requester || '',
-        invoice_owner: purchase.invoice_owner || '',
+        invoice_owner: purchase.invoice_owner || '',  // ✅ إضافة صاحب الفاتورة
         description: purchase.description || '',
         receiver: purchase.receiver || '',
         delivery_date: purchase.delivery_date || '',
@@ -95,6 +95,11 @@ const PurchaseForm: React.FC<Props> = ({
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
+    
+    // ✅ التحقق من صاحب الفاتورة (اختياري - أزل التعليق إذا أردت جعله إلزامياً)
+    // if (!data.invoice_owner.trim()) {
+    //   errors.invoice_owner = 'صاحب الفاتورة مطلوب';
+    // }
     
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
@@ -171,6 +176,7 @@ const PurchaseForm: React.FC<Props> = ({
     
     const submitData = {
       ...formData,
+      invoice_owner: formData.invoice_owner || '',  // ✅ تأكد من إرسال القيمة
       notes: formData.notes || ''
     };
     
@@ -290,7 +296,7 @@ const PurchaseForm: React.FC<Props> = ({
         {/* ✅ صاحب الفاتورة */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            صاحب الفاتورة
+            🧾 صاحب الفاتورة
           </label>
           <input
             type="text"
@@ -305,6 +311,9 @@ const PurchaseForm: React.FC<Props> = ({
           />
           {errors.invoice_owner && touched.invoice_owner && (
             <p className="text-red-500 text-xs mt-1">{errors.invoice_owner}</p>
+          )}
+          {!errors.invoice_owner && formData.invoice_owner && (
+            <p className="text-green-500 text-xs mt-1">✅ صاحب الفاتورة: {formData.invoice_owner}</p>
           )}
         </div>
         

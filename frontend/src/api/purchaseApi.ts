@@ -1,4 +1,4 @@
-// src/api/purchaseApi.ts
+// frontend/src/api/purchaseApi.ts
 import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import type { Purchase, PurchaseFilters, PurchaseResponse, DashboardStats } from '../types/purchase.types';
 
@@ -84,16 +84,35 @@ export const purchaseApi = {
   
   getById: async (id: number): Promise<Purchase> => {
     const response = await api.get<Purchase>(`/purchases/${id}`);
+    // ✅ تأكد من وجود invoice_owner
+    if (response.data && !response.data.invoice_owner) {
+      return {
+        ...response.data,
+        invoice_owner: ''
+      };
+    }
     return response.data;
   },
   
   create: async (purchase: Omit<Purchase, 'id' | 'created_at' | 'updated_at'>): Promise<Purchase> => {
-    const response = await api.post<Purchase>('/purchases', purchase);
+    // ✅ تأكد من إرسال invoice_owner
+    const data = {
+      ...purchase,
+      invoice_owner: purchase.invoice_owner || '',
+      notes: purchase.notes || ''
+    };
+    const response = await api.post<Purchase>('/purchases', data);
     return response.data;
   },
   
   update: async (id: number, purchase: Partial<Purchase>): Promise<Purchase> => {
-    const response = await api.put<Purchase>(`/purchases/${id}`, purchase);
+    // ✅ تأكد من إرسال invoice_owner
+    const data = {
+      ...purchase,
+      invoice_owner: purchase.invoice_owner || '',
+      notes: purchase.notes || ''
+    };
+    const response = await api.put<Purchase>(`/purchases/${id}`, data);
     return response.data;
   },
   

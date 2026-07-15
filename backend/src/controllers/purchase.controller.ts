@@ -1,4 +1,4 @@
-// controllers/purchase.controller.ts
+// backend/src/controllers/purchase.controller.ts
 import { Request, Response } from 'express';
 import { getDB } from '../config/database.js';
 import { logActivity } from '../services/audit.service.js';
@@ -38,7 +38,7 @@ const validatePurchase = (data: any): PurchaseValidationResult => {
   if (!data.requester || data.requester.length < 1) {
     errors.push({ field: 'requester', message: 'Requester is required' });
   }
-  // ✅ إضافة التحقق من invoice_owner (اختياري)
+  // ✅ التحقق من invoice_owner اختياري - أزل التعليق إذا أردت جعله إلزامياً
   // if (data.invoice_owner && data.invoice_owner.length < 1) {
   //   errors.push({ field: 'invoice_owner', message: 'Invoice owner is required' });
   // }
@@ -168,6 +168,11 @@ export const getPurchaseById = async (req: Request, res: Response) => {
       throw new NotFoundError('Purchase not found');
     }
     
+    // ✅ تأكد من وجود invoice_owner
+    if (!purchase.invoice_owner) {
+      purchase.invoice_owner = '';
+    }
+    
     res.json(purchase);
   } catch (error) {
     logger.error('Error fetching purchase:', error);
@@ -194,7 +199,17 @@ export const createPurchase = async (req: Request, res: Response) => {
   try {
     const db = await getDB();
     const user = (req as any).user;
-    const { request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes } = req.body; // ✅ إضافة invoice_owner
+    const { 
+      request_number, 
+      date, 
+      requester, 
+      invoice_owner,  // ✅ إضافة
+      description, 
+      receiver, 
+      delivery_date, 
+      status, 
+      notes 
+    } = req.body;
 
     const validation = validatePurchase(req.body);
     if (!validation.valid) {
@@ -213,14 +228,17 @@ export const createPurchase = async (req: Request, res: Response) => {
       throw new ValidationError('Delivery date must be after request date');
     }
 
+    // ✅ معالجة invoice_owner
+    const invoiceOwnerValue = invoice_owner || '';
+
     const result = await db.run(
       `INSERT INTO purchases (request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, // ✅ إضافة invoice_owner
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         request_number, 
         date, 
         requester, 
-        invoice_owner || '', // ✅ إضافة
+        invoiceOwnerValue,  // ✅ استخدام القيمة المعالجة
         description, 
         receiver, 
         delivery_date, 
@@ -277,7 +295,17 @@ export const updatePurchase = async (req: Request, res: Response) => {
     const db = await getDB();
     const user = (req as any).user;
     const { id } = req.params;
-    const { request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes } = req.body; // ✅ إضافة invoice_owner
+    const { 
+      request_number, 
+      date, 
+      requester, 
+      invoice_owner,  // ✅ إضافة
+      description, 
+      receiver, 
+      delivery_date, 
+      status, 
+      notes 
+    } = req.body;
 
     const existing = await db.get(
       'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
@@ -315,14 +343,20 @@ export const updatePurchase = async (req: Request, res: Response) => {
     const updates: string[] = [];
     const params: any[] = [];
 
-    if (request_number) { updates.push('request_number = ?'); params.push(request_number); }
-    if (date) { updates.push('date = ?'); params.push(date); }
-    if (requester) { updates.push('requester = ?'); params.push(requester); }
-    if (invoice_owner !== undefined) { updates.push('invoice_owner = ?'); params.push(invoice_owner); } // ✅ إضافة
-    if (description) { updates.push('description = ?'); params.push(description); }
-    if (receiver) { updates.push('receiver = ?'); params.push(receiver); }
-    if (delivery_date) { updates.push('delivery_date = ?'); params.push(delivery_date); }
-    if (status) { updates.push('status = ?'); params.push(status); }
+    if (request_number !== undefined) { updates.push('request_number = ?'); params.push(request_number); }
+    if (date !== undefined) { updates.push('date = ?'); params.push(date); }
+    if (requester !== undefined) { updates.push('requester = ?'); params.push(requester); }
+    
+    // ✅ تحديث invoice_owner
+    if (invoice_owner !== undefined) { 
+      updates.push('invoice_owner = ?'); 
+      params.push(invoice_owner || '');
+    }
+    
+    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
+    if (receiver !== undefined) { updates.push('receiver = ?'); params.push(receiver); }
+    if (delivery_date !== undefined) { updates.push('delivery_date = ?'); params.push(delivery_date); }
+    if (status !== undefined) { updates.push('status = ?'); params.push(status); }
     if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
 
     if (updates.length === 0) {
@@ -758,8 +792,6 @@ export const exportPurchases = async (req: Request, res: Response) => {
     });
   }
 };
-
-
 
 // ============================================
 // Overdue Purchases
