@@ -88,7 +88,6 @@ const ParentsDedication: React.FC<Props> = ({ onClose }) => {
             </button>
           </div>
 
-          {/* نص صغير */}
           <p className="text-xs text-gray-400 mt-4">
             🤍 في ذمة الله
           </p>

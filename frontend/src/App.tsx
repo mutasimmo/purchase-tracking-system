@@ -51,20 +51,18 @@ const AppContent = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ✅ State للتحكم في ظهور رسالة الدعوة
+  // ✅ State للتحكم في ظهور رسالة الدعوة - تظهر دائماً عند تسجيل الدخول
   const [showDedication, setShowDedication] = useState(false);
 
-  // ✅ التحقق من أن المستخدم شاهد الرسالة من قبل
+  // ✅ عند تغيير المستخدم (تسجيل دخول جديد)، تظهر الرسالة
   useEffect(() => {
-    const hasSeen = localStorage.getItem('hasSeenDedication');
-    if (!hasSeen) {
+    if (user) {
       setShowDedication(true);
     }
-  }, []);
+  }, [user]);
 
   const handleCloseDedication = () => {
     setShowDedication(false);
-    localStorage.setItem('hasSeenDedication', 'true');
   };
 
   // ============================================
@@ -342,8 +340,8 @@ const AppContent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-2 sm:p-4 md:p-8">
-      {/* ✅ رسالة الدعوة للوالدين */}
-      {showDedication && <ParentsDedication onClose={handleCloseDedication} />}
+      {/* ✅ رسالة الدعوة للوالدين - تظهر عند كل تسجيل دخول */}
+      {showDedication && user && <ParentsDedication onClose={handleCloseDedication} />}
 
       <Toaster 
         position="top-center"
