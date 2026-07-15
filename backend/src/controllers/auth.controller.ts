@@ -1,4 +1,4 @@
-// src/controllers/auth.controller.ts
+// backend/src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import { getDB } from '../config/database.js';
 import { 
@@ -202,29 +202,39 @@ export const register = async (req: Request, res: Response) => {
 };
 
 // ============================================
-// Logout
+// Logout - ✅ Fixed: works without authenticate
 // ============================================
 
 export const logout = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    // Get token from cookie or header
     const token = getTokenFromCookie(req) || req.headers.authorization?.substring(7);
     
+    // Try to get user if available (from authenticate middleware)
+    const user = (req as any).user;
+    
+    // If token and user exist, blacklist the token
     if (token && user) {
-      await blacklistToken(token, user.id);
-      
-      await logActivity(
-        user.id,
-        user.username,
-        'LOGOUT',
-        'user',
-        user.id,
-        { ip: req.ip },
-        req.ip,
-        req.headers['user-agent']
-      );
+      try {
+        await blacklistToken(token, user.id);
+        
+        await logActivity(
+          user.id,
+          user.username,
+          'LOGOUT',
+          'user',
+          user.id,
+          { ip: req.ip },
+          req.ip,
+          req.headers['user-agent']
+        );
+      } catch (error) {
+        // Don't block logout if blacklisting fails
+        logger.warn('Failed to blacklist token during logout:', error);
+      }
     }
     
+    // Always clear cookies
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -243,6 +253,15 @@ export const logout = async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Logout error:', error);
+    
+    // Even on error, clear cookies
+    try {
+      res.clearCookie('token');
+      res.clearCookie('refreshToken');
+    } catch (cookieError) {
+      // Ignore
+    }
+    
     res.status(500).json({ 
       error: 'Logout failed',
       code: 'SERVER_ERROR'
