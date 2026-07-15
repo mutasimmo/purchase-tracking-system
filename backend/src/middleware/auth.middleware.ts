@@ -175,7 +175,7 @@ export const authorize = (...roles: string[]) => {
 // ✅ استخدام keyGenerator بسيط بدون مشاكل IPv6
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 100,
   message: {
     error: 'Too many login attempts',
     message: 'Please try again after 15 minutes',
@@ -189,7 +189,7 @@ export const authRateLimiter = rateLimit({
 
 export const registerRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
+  max: 100,
   message: {
     error: 'Too many registration attempts',
     message: 'Please try again after 1 hour',
