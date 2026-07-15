@@ -31,7 +31,14 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     show: false,
     userId: null
   });
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    username: string;
+    password: string;
+    full_name: string;
+    email?: string;  // ✅ جعل البريد الإلكتروني اختيارياً
+    role: string;
+    is_active: boolean;
+  }>({
     username: '',
     password: '',
     full_name: '',
@@ -156,11 +163,30 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
     
     try {
       setFormLoading(true);
+      
+      // ✅ إزالة البريد الإلكتروني إذا كان فارغاً (بدون استخدام delete)
+      const submitData: any = {
+        username: formData.username,
+        full_name: formData.full_name,
+        role: formData.role,
+        is_active: formData.is_active
+      };
+      
+      // ✅ إضافة كلمة المرور فقط إذا كانت موجودة
+      if (formData.password) {
+        submitData.password = formData.password;
+      }
+      
+      // ✅ إضافة البريد الإلكتروني فقط إذا كان موجوداً وغير فارغ
+      if (formData.email && formData.email.trim() !== '') {
+        submitData.email = formData.email;
+      }
+      
       if (editingUser) {
-        await authApi.updateUser(editingUser.id, formData);
+        await authApi.updateUser(editingUser.id, submitData);
         toast.success('✅ تم تحديث المستخدم بنجاح');
       } else {
-        await authApi.createUser(formData);
+        await authApi.createUser(submitData);
         toast.success('✅ تم إضافة المستخدم بنجاح');
       }
       setShowForm(false);
@@ -496,14 +522,19 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
                 />
               </div>
 
+              {/* ✅ البريد الإلكتروني - اختياري */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">البريد الإلكتروني</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <i className="fas fa-envelope text-purple-500 ml-1"></i>
+                  البريد الإلكتروني <span className="text-gray-400 text-xs font-normal">(اختياري)</span>
+                </label>
                 <input
                   type="email"
                   name="email"
-                  value={formData.email}
+                  value={formData.email || ''}
                   onChange={handleFormChange}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  placeholder="أدخل البريد الإلكتروني (اختياري)"
                 />
               </div>
 
