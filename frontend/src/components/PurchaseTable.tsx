@@ -139,7 +139,7 @@ const PurchaseTable: React.FC<Props> = ({
         'رقم الطلب': p.request_number,
         'التاريخ': new Date(p.date).toLocaleDateString('ar-SA'),
         'الجهة الطالبة': p.requester,
-        'صاحب الفاتورة': p.invoice_owner || '',  // ✅ إضافة
+        'صاحب الفاتورة': p.invoice_owner || '',
         'وصف الطلب': p.description,
         'المستلم': p.receiver,
         'تاريخ التسليم': new Date(p.delivery_date).toLocaleDateString('ar-SA'),
@@ -153,7 +153,7 @@ const PurchaseTable: React.FC<Props> = ({
       XLSX.utils.book_append_sheet(wb, ws, 'طلبات المشتريات');
       
       ws['!cols'] = [
-        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 },  // ✅ إضافة عمود
+        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 },
         { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 12 },
         { wch: 25 }, { wch: 15 }
       ];
@@ -204,7 +204,7 @@ const PurchaseTable: React.FC<Props> = ({
           .col-request { width: 70px; min-width: 70px; }
           .col-date { width: 75px; min-width: 75px; }
           .col-requester { width: 110px; min-width: 110px; }
-          .col-invoice-owner { width: 110px; min-width: 110px; }  // ✅ إضافة
+          .col-invoice-owner { width: 110px; min-width: 110px; }
           .col-description { width: 150px; min-width: 100px; max-width: 180px; }
           .col-receiver { width: 100px; min-width: 100px; }
           .col-delivery { width: 75px; min-width: 75px; }
@@ -237,7 +237,7 @@ const PurchaseTable: React.FC<Props> = ({
               <th class="col-request">رقم الطلب</th>
               <th class="col-date">التاريخ</th>
               <th class="col-requester">الجهة الطالبة</th>
-              <th class="col-invoice-owner">صاحب الفاتورة</th>  // ✅ إضافة
+              <th class="col-invoice-owner">صاحب الفاتورة</th>
               <th class="col-description">وصف الطلب</th>
               <th class="col-receiver">المستلم</th>
               <th class="col-delivery">تاريخ التسليم</th>
@@ -257,7 +257,7 @@ const PurchaseTable: React.FC<Props> = ({
                   <td><strong>${purchase.request_number}</strong></td>
                   <td>${new Date(purchase.date).toLocaleDateString('ar-SA')}</td>
                   <td style="text-align: right;">${purchase.requester}</td>
-                  <td style="text-align: right;">${purchase.invoice_owner || '-'}</td>  // ✅ إضافة
+                  <td style="text-align: right;">${purchase.invoice_owner || '-'}</td>
                   <td style="text-align: right; font-size: 9px;">${purchase.description || '-'}</td>
                   <td>${purchase.receiver}</td>
                   <td>${deliveryDate}${isOverdueStatus ? ' <span class="overdue-badge">⚠️</span>' : ''}</td>
@@ -351,7 +351,7 @@ const PurchaseTable: React.FC<Props> = ({
               <th className="whitespace-nowrap">رقم الطلب</th>
               <th className="whitespace-nowrap">التاريخ</th>
               <th className="whitespace-nowrap hidden sm:table-cell">الجهة الطالبة</th>
-              <th className="whitespace-nowrap hidden sm:table-cell">صاحب الفاتورة</th>  // ✅ إضافة
+              <th className="whitespace-nowrap hidden sm:table-cell">صاحب الفاتورة</th>
               <th className="whitespace-nowrap hidden md:table-cell">وصف الطلب</th>
               <th className="whitespace-nowrap hidden lg:table-cell">المستلم</th>
               <th className="whitespace-nowrap hidden sm:table-cell">تاريخ التسليم</th>
@@ -367,7 +367,7 @@ const PurchaseTable: React.FC<Props> = ({
                 <td className="font-bold text-purple-700 text-sm md:text-lg">{purchase.request_number}</td>
                 <td className="text-xs md:text-sm">{new Date(purchase.date).toLocaleDateString('ar-SA')}</td>
                 <td className="font-medium text-xs md:text-sm hidden sm:table-cell">{purchase.requester}</td>
-                <td className="font-medium text-xs md:text-sm hidden sm:table-cell">{purchase.invoice_owner || '—'}</td>  // ✅ إضافة
+                <td className="font-medium text-xs md:text-sm hidden sm:table-cell">{purchase.invoice_owner || '—'}</td>
                 <td className="max-w-xs truncate text-xs md:text-sm hidden md:table-cell" title={purchase.description}>{purchase.description}</td>
                 <td className="text-xs md:text-sm hidden lg:table-cell">{purchase.receiver}</td>
                 <td className="text-xs md:text-sm hidden sm:table-cell">
