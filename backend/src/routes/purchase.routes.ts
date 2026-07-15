@@ -1,45 +1,72 @@
-// src/routes/backup.routes.ts
+// src/routes/purchase.routes.ts
 import { Router } from 'express';
-import { createBackup, listBackups, restoreBackup } from '../utils/backup.js';
+import {
+  getAllPurchases,
+  getPurchaseById,
+  createPurchase,
+  updatePurchase,
+  deletePurchase,
+  getDashboardStats,
+  searchPurchases,
+  updateStatus,
+  exportPurchases,
+  getOverduePurchases,
+  getExpiringToday,
+  getAlertStats,
+  getAuditLogs,
+  getAuditLogsByPurchase,
+  restorePurchase,
+  getDeletedPurchases
+} from '../controllers/purchase.controller.js';
 import { authenticate, authorize } from '../middleware/auth.middleware.js';
+import { validatePurchaseExists, validatePurchaseOwnership } from '../middleware/purchase.middleware.js';
 
 const router = Router();
 
-// ✅ إنشاء نسخة احتياطية (Admin فقط)
-router.post('/backup', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
-  try {
-    const backupPath = await createBackup();
-    res.json({ success: true, backup: backupPath });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: 'Backup failed', message: errorMessage });
-  }
-});
+// ============================================
+// 📊 Dashboard & Reports
+// ============================================
 
-// ✅ قائمة النسخ الاحتياطية (Admin فقط)
-router.get('/backups', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
-  try {
-    const backups = listBackups();
-    res.json({ backups });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: 'Failed to list backups', message: errorMessage });
-  }
-});
+router.get('/dashboard', authenticate, getDashboardStats);
+router.get('/export', authenticate, authorize('admin', 'manager'), exportPurchases);
 
-// ✅ استعادة نسخة احتياطية (Admin فقط)
-router.post('/backup/restore', authenticate, authorize('admin', 'super_admin'), async (req, res) => {
-  try {
-    const { backupFile } = req.body;
-    if (!backupFile) {
-      return res.status(400).json({ error: 'Backup file name required' });
-    }
-    await restoreBackup(backupFile);
-    res.json({ success: true, message: 'Database restored successfully' });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    res.status(500).json({ error: 'Restore failed', message: errorMessage });
-  }
-});
+// ============================================
+// 🔍 Search
+// ============================================
+
+router.get('/search', authenticate, searchPurchases);
+
+// ============================================
+// 🔔 Alerts
+// ============================================
+
+router.get('/alerts/overdue', authenticate, getOverduePurchases);
+router.get('/alerts/expiring-today', authenticate, getExpiringToday);
+router.get('/alerts/stats', authenticate, getAlertStats);
+
+// ============================================
+// 📋 Audit Logs (Admin only)
+// ============================================
+
+router.get('/audit-logs', authenticate, authorize('admin'), getAuditLogs);
+router.get('/audit-logs/purchase/:id', authenticate, authorize('admin'), getAuditLogsByPurchase);
+
+// ============================================
+// 🗑️ Deleted Purchases (Admin only)
+// ============================================
+
+router.get('/trash', authenticate, authorize('admin'), getDeletedPurchases);
+router.patch('/:id/restore', authenticate, authorize('admin'), restorePurchase);
+
+// ============================================
+// 📌 Core CRUD Routes
+// ============================================
+
+router.get('/', authenticate, getAllPurchases);
+router.get('/:id', authenticate, validatePurchaseExists, getPurchaseById);
+router.post('/', authenticate, createPurchase);
+router.put('/:id', authenticate, validatePurchaseExists, validatePurchaseOwnership, updatePurchase);
+router.patch('/:id/status', authenticate, validatePurchaseExists, updateStatus);
+router.delete('/:id', authenticate, validatePurchaseExists, authorize('admin', 'manager'), deletePurchase);
 
 export default router;
