@@ -1,4 +1,4 @@
-// src/App.tsx
+// src/App.tsx (بعد دمج Home و Dashboard)
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { purchaseApi } from './api/purchaseApi';
@@ -6,8 +6,7 @@ import type { Purchase, PurchaseFilters, PurchaseStatus } from './types/purchase
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PurchaseTable from './components/PurchaseTable';
 import PurchaseForm from './components/PurchaseForm';
-import Dashboard from './components/Dashboard';
-import Home from './components/Home';
+import Home from './components/Home'; // ✅ الآن يحتوي على Dashboard بداخله
 import Filters from './components/Filters';
 import Pagination from './components/Pagination';
 import Login from './components/Login';
@@ -40,8 +39,6 @@ const AppContent = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
-  const [showHome, setShowHome] = useState(true);
   const [showAlerts, setShowAlerts] = useState(false);
   const [showUserManagement, setShowUserManagement] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -80,7 +77,7 @@ const AppContent = () => {
     try {
       const response = await purchaseApi.getAll({
         page: 1,
-        limit: 1000 // جلب أكبر عدد ممكن
+        limit: 1000
       });
       
       const nextNum = generateNextRequestNumber(response.data);
@@ -169,14 +166,13 @@ const AppContent = () => {
   }, [filters]);
 
   // ============================================
-  // ✅ تحديث حالة الطلب (بدون إعادة تحميل)
+  // ✅ تحديث حالة الطلب
   // ============================================
 
   const handleStatusUpdate = useCallback(async (id: number, newStatus: string) => {
     try {
       await purchaseApi.updateStatus(id, newStatus);
       
-      // ✅ تحويل newStatus إلى PurchaseStatus
       setPurchases(prev => prev.map(p => 
         p.id === id ? { ...p, status: newStatus as PurchaseStatus } : p
       ));
@@ -247,8 +243,6 @@ const AppContent = () => {
       } else {
         await purchaseApi.create(data);
         toast.success('✅ تم إضافة الطلب بنجاح');
-        
-        // ✅ تحديث رقم الطلب التالي بعد الإضافة
         await updateNextRequestNumber();
       }
       setShowForm(false);
@@ -294,6 +288,7 @@ const AppContent = () => {
         'رقم الطلب': p.request_number,
         'التاريخ': new Date(p.date).toLocaleDateString('ar-SA'),
         'الجهة الطالبة': p.requester,
+        'صاحب الفاتورة': p.invoice_owner || '',
         'وصف الطلب': p.description,
         'المستلم': p.receiver,
         'تاريخ التسليم': new Date(p.delivery_date).toLocaleDateString('ar-SA'),
@@ -306,8 +301,8 @@ const AppContent = () => {
       XLSX.utils.book_append_sheet(wb, ws, 'طلبات المشتريات');
       
       ws['!cols'] = [
-        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 30 },
-        { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
+        { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 20 },
+        { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 15 }
       ];
 
       const fileName = `تقرير_المشتريات_${new Date().toLocaleDateString('ar-SA').replace(/\//g, '-')}.xlsx`;
@@ -318,13 +313,6 @@ const AppContent = () => {
       console.error(error);
     }
   }, [purchases]);
-
-  // ============================================
-  // ✅ قيم محسوبة للعرض
-  // ============================================
-
-  const isHomeVisible = showHome;
-  const isDashboardVisible = showDashboard;
 
   // ============================================
   // ✅ Render
@@ -424,61 +412,42 @@ const AppContent = () => {
           </div>
         </header>
 
-        {/* المحتوى الرئيسي */}
-        {isHomeVisible ? (
-          <div className="fade-in-up">
-            <Home 
-              onOpenDashboard={() => {
-                setShowHome(false);
-                setShowDashboard(true);
-              }}
-              onOpenAddForm={handleAdd}
-              onOpenAlerts={() => setShowAlerts(true)}
-              onExportExcel={exportToExcel}
-            />
+        {/* ✅ المحتوى الرئيسي - Home يحتوي الآن على Dashboard */}
+        <Home 
+          onOpenAddForm={handleAdd}
+          onOpenAlerts={() => setShowAlerts(true)}
+        />
+
+        {/* ✅ الفلتر والجدول */}
+        <Filters 
+          onFilterChange={handleFilterChange}
+          onSearch={handleSearch}
+          loading={loading}
+        />
+
+        {error && (
+          <div className="bg-red-50 border-r-4 border-red-500 text-red-700 px-3 sm:px-4 md:px-6 py-3 sm:py-4 rounded-xl md:rounded-2xl mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 fade-in-up text-sm sm:text-base">
+            <i className="fas fa-exclamation-circle text-red-500 text-base sm:text-xl"></i>
+            <span className="font-medium">{error}</span>
           </div>
-        ) : (
-          <>
-            {isDashboardVisible && (
-              <div className="mb-4 sm:mb-6 md:mb-8 fade-in-up">
-                <Dashboard onClose={() => {
-                  setShowDashboard(false);
-                  setShowHome(true);
-                }} />
-              </div>
-            )}
-
-            <Filters 
-              onFilterChange={handleFilterChange}
-              onSearch={handleSearch}
-              loading={loading}
-            />
-
-            {error && (
-              <div className="bg-red-50 border-r-4 border-red-500 text-red-700 px-3 sm:px-4 md:px-6 py-3 sm:py-4 rounded-xl md:rounded-2xl mb-4 sm:mb-6 flex items-center gap-2 sm:gap-3 fade-in-up text-sm sm:text-base">
-                <i className="fas fa-exclamation-circle text-red-500 text-base sm:text-xl"></i>
-                <span className="font-medium">{error}</span>
-              </div>
-            )}
-
-            <div className="fade-in-up">
-              <PurchaseTable
-                purchases={purchases}
-                onEdit={handleEdit}
-                onDelete={handleDeleteClick}
-                onStatusChange={handleStatusUpdate}
-                loading={loading}
-              />
-            </div>
-
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-              loading={loading}
-            />
-          </>
         )}
+
+        <div className="fade-in-up">
+          <PurchaseTable
+            purchases={purchases}
+            onEdit={handleEdit}
+            onDelete={handleDeleteClick}
+            onStatusChange={handleStatusUpdate}
+            loading={loading}
+          />
+        </div>
+
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+          loading={loading}
+        />
 
         {/* MODALS */}
         {showForm && (
