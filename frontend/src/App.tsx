@@ -16,6 +16,7 @@ import Alerts from './components/Alerts';
 import AlertBell from './components/AlertBell';
 import UserManagement from './components/UserManagement';
 import Chat from './components/Chat';
+import ParentsDedication from './components/ParentsDedication'; // ✅ إضافة
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -49,6 +50,22 @@ const AppContent = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // ✅ State للتحكم في ظهور رسالة الدعوة
+  const [showDedication, setShowDedication] = useState(false);
+
+  // ✅ التحقق من أن المستخدم شاهد الرسالة من قبل
+  useEffect(() => {
+    const hasSeen = localStorage.getItem('hasSeenDedication');
+    if (!hasSeen) {
+      setShowDedication(true);
+    }
+  }, []);
+
+  const handleCloseDedication = () => {
+    setShowDedication(false);
+    localStorage.setItem('hasSeenDedication', 'true');
+  };
 
   // ============================================
   // ✅ دوال مساعدة
@@ -325,6 +342,9 @@ const AppContent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-2 sm:p-4 md:p-8">
+      {/* ✅ رسالة الدعوة للوالدين */}
+      {showDedication && <ParentsDedication onClose={handleCloseDedication} />}
+
       <Toaster 
         position="top-center"
         toastOptions={{
