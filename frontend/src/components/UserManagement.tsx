@@ -53,10 +53,21 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const data = await authApi.getAllUsers();
-      setUsers(data);
+      const response = await authApi.getAllUsers();
+      
+      // ✅ تأكد من أن البيانات مصفوفة
+      const usersData = response?.data?.data || response?.data || response || [];
+      
+      if (Array.isArray(usersData)) {
+        setUsers(usersData);
+      } else {
+        console.error('❌ Users data is not an array:', usersData);
+        setUsers([]);
+        toast.error('❌ خطأ في تنسيق بيانات المستخدمين');
+      }
     } catch (error) {
       handleApiError(error, 'حدث خطأ في تحميل المستخدمين');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -90,9 +101,11 @@ const UserManagement: React.FC<Props> = ({ onClose }) => {
   // ============================================
 
   const filteredUsers = useMemo(() => {
+    if (!Array.isArray(users)) return [];
+    
     return users.filter(user => {
-      const matchesSearch = user.username.includes(searchTerm) || 
-                            user.full_name.includes(searchTerm) ||
+      const matchesSearch = user.username?.includes(searchTerm) || 
+                            user.full_name?.includes(searchTerm) ||
                             (user.email && user.email.includes(searchTerm));
       const matchesRole = filterRole ? user.role === filterRole : true;
       return matchesSearch && matchesRole;

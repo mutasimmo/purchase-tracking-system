@@ -1,4 +1,4 @@
-// src/components/Register.tsx
+// src/components/Register.tsx - ✅ تم حذف التسجيل من الواجهة
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -78,7 +78,6 @@ const Register: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    // ✅ مسح أخطاء الحقل عند التغيير
     if (fieldErrors[e.target.name]) {
       setFieldErrors({ ...fieldErrors, [e.target.name]: '' });
     }
@@ -93,21 +92,18 @@ const Register: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
     setError('');
     setFieldErrors({});
 
-    // ✅ التحقق من تطابق كلمة المرور
     if (formData.password !== formData.confirmPassword) {
       setFieldErrors({ confirmPassword: 'كلمة المرور غير متطابقة' });
       setError('كلمة المرور غير متطابقة');
       return;
     }
 
-    // ✅ التحقق من قوة كلمة المرور
     const passwordValidation = validatePassword(formData.password);
     if (!passwordValidation.valid) {
       setError(passwordValidation.errors[0]);
       return;
     }
 
-    // ✅ التحقق من الموافقة على الشروط
     if (!agreedToTerms) {
       setError('يجب الموافقة على شروط الاستخدام');
       return;
@@ -149,12 +145,19 @@ const Register: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
 
   return (
     <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+      {/* ✅ رسالة توضح أن التسجيل متاح للمدير فقط */}
       <div className="text-center mb-8">
         <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg">
           <i className="fas fa-user-plus text-white text-3xl"></i>
         </div>
         <h2 className="text-2xl font-bold text-gray-800 mt-4">إنشاء حساب جديد</h2>
         <p className="text-gray-500 text-sm">سجل بياناتك للانضمام إلى النظام</p>
+        
+        {/* ✅ رسالة تحذيرية */}
+        <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-sm text-yellow-800">
+          <i className="fas fa-lock text-yellow-600 ml-2"></i>
+          ⚠️ التسجيل متاح فقط للمديرين (Admin). إذا كنت مديراً، قم بتسجيل الدخول ثم استخدم إدارة المستخدمين.
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -242,7 +245,6 @@ const Register: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
               </button>
             </div>
             
-            {/* مؤشر قوة كلمة المرور */}
             {formData.password && (
               <div className="mt-2">
                 <div className="flex gap-1 h-1.5">
@@ -328,20 +330,14 @@ const Register: React.FC<Props> = ({ onClose, onSwitchToLogin }) => {
             </div>
           )}
 
-          {/* زر إنشاء الحساب */}
+          {/* زر إنشاء الحساب - معطل للتسجيل العام */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-xl py-3 font-semibold hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={true}  // ✅ تعطيل التسجيل العام
+            className="w-full bg-gray-400 text-white rounded-xl py-3 font-semibold cursor-not-allowed opacity-50"
           >
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <i className="fas fa-spinner fa-spin"></i>
-                جاري إنشاء الحساب...
-              </span>
-            ) : (
-              'إنشاء حساب'
-            )}
+            <i className="fas fa-lock ml-2"></i>
+            التسجيل متاح للمديرين فقط
           </button>
         </div>
       </form>

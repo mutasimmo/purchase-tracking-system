@@ -1,4 +1,4 @@
-// src/components/Login.tsx
+// src/components/Login.tsx - ✅ تم حذف رابط إنشاء حساب
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -195,8 +195,8 @@ const Login: React.FC<Props> = ({ onClose, onRegister }) => {
             )}
           </button>
 
-          {/* رابط إنشاء حساب */}
-          <div className="text-center mt-2">
+          {/* ✅ تم حذف رابط "إنشاء حساب جديد" */}
+          {/* <div className="text-center mt-2">
             <span className="text-sm text-gray-500">ليس لديك حساب؟ </span>
             <button
               type="button"
@@ -205,7 +205,7 @@ const Login: React.FC<Props> = ({ onClose, onRegister }) => {
             >
               إنشاء حساب جديد
             </button>
-          </div>
+          </div> */}
         </div>
       </form>
     </div>
