@@ -101,13 +101,11 @@ export const UserRepository = {
     try {
       const supabase = getSupabase();
 
-      // Check if username exists
       const existing = await UserRepository.findByUsername(userData.username);
       if (existing) {
         throw new ConflictError('Username already exists');
       }
 
-      // Check if email exists
       if (userData.email && userData.email.trim() !== '') {
         const existingEmail = await UserRepository.findByEmail(userData.email);
         if (existingEmail) {
@@ -138,7 +136,7 @@ export const UserRepository = {
     }
   },
 
-  // ✅ Update user (مع دعم البريد الإلكتروني الفارغ)
+  // ✅ Update user
   update: async (id: number, updates: UserUpdate): Promise<User> => {
     try {
       const supabase = getSupabase();
@@ -150,7 +148,7 @@ export const UserRepository = {
 
       // ✅ التحقق من البريد الإلكتروني فقط إذا كان موجوداً وغير فارغ
       if (updates.email && updates.email.trim() !== '') {
-        const existingEmail = await supabase
+        const { data: existingEmail, error } = await supabase
           .from('users')
           .select('id')
           .eq('email', updates.email.trim())
@@ -158,6 +156,7 @@ export const UserRepository = {
           .is('deleted_at', null)
           .maybeSingle();
 
+        if (error) throw error;
         if (existingEmail) {
           throw new ConflictError('Email already exists');
         }
@@ -169,9 +168,13 @@ export const UserRepository = {
 
       if (updates.full_name) updateData.full_name = updates.full_name;
       
-      // ✅ معالجة البريد الإلكتروني
+      // ✅ معالجة البريد الإلكتروني بشكل صحيح
       if (updates.email !== undefined) {
-        updateData.email = updates.email && updates.email.trim() !== '' ? updates.email.trim() : null;
+        if (updates.email === null || updates.email === '' || updates.email.trim() === '') {
+          updateData.email = null;
+        } else {
+          updateData.email = updates.email.trim();
+        }
       }
       
       if (updates.role) updateData.role = updates.role;
