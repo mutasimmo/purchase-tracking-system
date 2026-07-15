@@ -108,10 +108,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       const response = await authApi.login(username, password);
       
-      // ✅ طباعة الرد للتأكد
       console.log('📥 Login response:', response);
       
-      // ✅ التحقق من وجود token في الرد
       if (response.token && response.user) {
         setUser(response.user);
         localStorage.setItem('user', JSON.stringify(response.user));
@@ -125,7 +123,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return true;
       }
       
-      // ✅ إذا كان الرد داخل response.data
       if (response.data?.token && response.data?.user) {
         setUser(response.data.user);
         localStorage.setItem('user', JSON.stringify(response.data.user));
@@ -138,7 +135,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return true;
       }
       
-      // ✅ إذا كان الرد يحتوي على success
       if (response.success && response.token && response.user) {
         setUser(response.user);
         localStorage.setItem('user', JSON.stringify(response.user));
@@ -164,16 +160,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // ✅ دالة تسجيل الخروج المعدلة
   const logout = async () => {
     try {
+      // محاولة إعلام الـ Backend بتسجيل الخروج
       await authApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // مسح جميع البيانات
       setUser(null);
-      localStorage.removeItem('user');
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      
+      // مسح cookies
+      document.cookie.split(';').forEach(cookie => {
+        document.cookie = cookie
+          .replace(/^ +/, '')
+          .replace(/=.*/, `=; expires=${new Date(0).toUTCString()}; path=/`);
+      });
+      
       toast.success('تم تسجيل الخروج بنجاح');
-    } catch (error) {
-      toast.error('حدث خطأ في تسجيل الخروج');
+      
+      // ✅ إعادة التوجيه إلى صفحة تسجيل الدخول
+      window.location.href = '/login';
     }
   };
 
