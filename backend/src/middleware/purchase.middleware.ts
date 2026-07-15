@@ -1,6 +1,6 @@
 // src/middleware/purchase.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { getDB } from '../config/database.js';
+import { getSupabase } from '../config/database.js';
 import { NotFoundError, AuthorizationError, ValidationError } from '../types/errors.js';
 import logger from '../config/logger.js';
 import { z } from 'zod';
@@ -12,14 +12,16 @@ import { z } from 'zod';
 export const validatePurchaseExists = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    const purchase = await db.get(
-      'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
-      [id]
-    );
+    const { data: purchase, error } = await supabase
+      .from('purchases')
+      .select('*')
+      .eq('id', parseInt(id))
+      .is('deleted_at', null)
+      .maybeSingle();
     
-    if (!purchase) {
+    if (error || !purchase) {
       throw new NotFoundError('Purchase not found');
     }
     
@@ -89,6 +91,7 @@ export const purchaseSchema = z.object({
   request_number: z.string().min(1).max(50),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
   requester: z.string().min(1).max(100),
+  invoice_owner: z.string().max(100).optional(),
   description: z.string().min(1).max(500),
   receiver: z.string().min(1).max(100),
   delivery_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
@@ -167,14 +170,15 @@ export const validateStatusUpdate = (req: Request, res: Response, next: NextFunc
 export const checkPurchaseNotDeleted = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    const purchase = await db.get(
-      'SELECT deleted_at FROM purchases WHERE id = ?',
-      [id]
-    );
+    const { data: purchase, error } = await supabase
+      .from('purchases')
+      .select('deleted_at')
+      .eq('id', parseInt(id))
+      .maybeSingle();
     
-    if (!purchase) {
+    if (error || !purchase) {
       throw new NotFoundError('Purchase not found');
     }
     

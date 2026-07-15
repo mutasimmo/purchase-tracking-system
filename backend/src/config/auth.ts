@@ -1,7 +1,7 @@
 // src/config/auth.ts
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { getDB } from './database.js';
+import { getSupabase } from './database.js';
 import logger from './logger.js';
 
 // ============================================
@@ -43,11 +43,10 @@ export const validatePassword = (password: string): { valid: boolean; errors: st
 };
 
 // ============================================
-// 🎫 Token functions - ✅ FIXED
+// 🎫 Token functions
 // ============================================
 
 export const generateToken = (userId: number, username: string, role: string = 'user'): string => {
-  // Create payload
   const payload: jwt.JwtPayload = {
     id: userId,
     username,
@@ -55,7 +54,6 @@ export const generateToken = (userId: number, username: string, role: string = '
     iat: Math.floor(Date.now() / 1000)
   };
   
-  // ✅ Sign with separate payload, secret, and options
   const token = jwt.sign(
     payload,
     JWT_SECRET,
@@ -70,14 +68,12 @@ export const generateToken = (userId: number, username: string, role: string = '
 };
 
 export const generateRefreshToken = (userId: number): string => {
-  // Create payload
   const payload: jwt.JwtPayload = {
     id: userId,
     type: 'refresh',
     iat: Math.floor(Date.now() / 1000)
   };
   
-  // ✅ Sign with separate payload, secret, and options - FIXES LINE 75
   const token = jwt.sign(
     payload,
     JWT_SECRET,
@@ -134,17 +130,20 @@ export const getRefreshTokenFromCookie = (req: any): string | null => {
 };
 
 // ============================================
-// 👤 User functions
+// 👤 User functions (using Supabase)
 // ============================================
 
 export const getUserWithRole = async (userId: number) => {
   try {
-    const db = await getDB();
-    const user = await db.get(
-      `SELECT id, username, full_name, email, role, is_active, created_at, last_login 
-       FROM users WHERE id = ?`,
-      [userId]
-    );
+    const supabase = getSupabase();
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, full_name, email, role, is_active, created_at, last_login')
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
+    
+    if (error) throw error;
     return user;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -155,11 +154,15 @@ export const getUserWithRole = async (userId: number) => {
 
 export const getUserByUsername = async (username: string) => {
   try {
-    const db = await getDB();
-    const user = await db.get(
-      `SELECT * FROM users WHERE username = ?`,
-      [username]
-    );
+    const supabase = getSupabase();
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .is('deleted_at', null)
+      .maybeSingle();
+    
+    if (error) throw error;
     return user;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -170,11 +173,15 @@ export const getUserByUsername = async (username: string) => {
 
 export const getUserByEmail = async (email: string) => {
   try {
-    const db = await getDB();
-    const user = await db.get(
-      `SELECT * FROM users WHERE email = ?`,
-      [email]
-    );
+    const supabase = getSupabase();
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .is('deleted_at', null)
+      .maybeSingle();
+    
+    if (error) throw error;
     return user;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -184,21 +191,24 @@ export const getUserByEmail = async (email: string) => {
 };
 
 // ============================================
-// 🚫 Token blacklist functions
+// 🚫 Token blacklist functions (using Supabase)
 // ============================================
 
 export const blacklistToken = async (token: string, userId: number) => {
   try {
-    const db = await getDB();
+    const supabase = getSupabase();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
     
-    await db.run(
-      `INSERT INTO token_blacklist (token, user_id, expires_at)
-       VALUES (?, ?, ?)`,
-      [token, userId, expiresAt.toISOString()]
-    );
+    const { error } = await supabase
+      .from('token_blacklist')
+      .insert({
+        token: token,
+        user_id: userId,
+        expires_at: expiresAt.toISOString()
+      });
     
+    if (error) throw error;
     logger.info(`Token blacklisted for user ${userId}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -209,19 +219,30 @@ export const blacklistToken = async (token: string, userId: number) => {
 
 export const revokeAllUserTokens = async (userId: number) => {
   try {
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    await db.run(`
-      INSERT INTO token_blacklist (token, user_id, expires_at)
-      SELECT token, user_id, expires_at 
-      FROM sessions 
-      WHERE user_id = ? AND is_active = 1
-    `, [userId]);
+    // Get all active sessions
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('sessions')
+      .select('token')
+      .eq('user_id', userId)
+      .eq('is_active', 1);
     
-    await db.run(
-      'UPDATE sessions SET is_active = 0 WHERE user_id = ?',
-      [userId]
-    );
+    if (sessionsError) throw sessionsError;
+    
+    if (sessions && sessions.length > 0) {
+      for (const session of sessions) {
+        await blacklistToken(session.token, userId);
+      }
+    }
+    
+    // Deactivate all sessions
+    const { error: updateError } = await supabase
+      .from('sessions')
+      .update({ is_active: 0 })
+      .eq('user_id', userId);
+    
+    if (updateError) throw updateError;
     
     logger.info(`All tokens revoked for user ${userId}`);
   } catch (error) {
@@ -233,12 +254,15 @@ export const revokeAllUserTokens = async (userId: number) => {
 
 export const cleanupExpiredTokens = async () => {
   try {
-    const db = await getDB();
-    const result = await db.run(
-      'DELETE FROM token_blacklist WHERE expires_at < datetime("now")'
-    );
-    logger.info(`Cleaned up ${result.changes} expired tokens`);
-    return result.changes;
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('token_blacklist')
+      .delete()
+      .lt('expires_at', new Date().toISOString());
+    
+    if (error) throw error;
+    logger.info(`Cleaned up expired tokens`);
+    return 0;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Error cleaning up expired tokens:', errorMessage);
@@ -252,22 +276,28 @@ export const cleanupExpiredTokens = async () => {
 
 export const logFailedLogin = async (username: string, ip: string, userAgent: string) => {
   try {
-    const db = await getDB();
-    await db.run(
-      `INSERT INTO audit_log (username, action, entity_type, changes, ip_address, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, 'FAILED_LOGIN', 'auth', JSON.stringify({ username, ip }), ip, userAgent]
-    );
+    const supabase = getSupabase();
     
-    const attempts = await db.get(
-      `SELECT COUNT(*) as count 
-       FROM audit_log 
-       WHERE username = ? AND action = 'FAILED_LOGIN' 
-       AND created_at > datetime('now', '-15 minutes')`,
-      [username]
-    );
+    await supabase
+      .from('audit_log')
+      .insert({
+        username: username,
+        action: 'FAILED_LOGIN',
+        entity_type: 'auth',
+        changes: JSON.stringify({ username, ip }),
+        ip_address: ip,
+        user_agent: userAgent
+      });
     
-    if (attempts.count >= 5) {
+    // Check for too many attempts
+    const { count, error } = await supabase
+      .from('audit_log')
+      .select('*', { count: 'exact', head: true })
+      .eq('username', username)
+      .eq('action', 'FAILED_LOGIN')
+      .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
+    
+    if (!error && count !== null && count >= 5) {
       logger.warn(`Too many failed login attempts for user: ${username}`);
     }
   } catch (error) {

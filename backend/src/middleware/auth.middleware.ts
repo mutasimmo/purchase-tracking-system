@@ -1,13 +1,13 @@
 // src/middleware/auth.middleware.ts
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, getTokenFromCookie, getUserWithRole } from '../config/auth.js';
-import { getDB } from '../config/database.js';
+import { verifyToken, getTokenFromCookie } from '../config/auth.js';
+import { getSupabase } from '../config/database.js';
 import logger from '../config/logger.js';
 import { AuthenticationError, AuthorizationError } from '../types/errors.js';
 import rateLimit from 'express-rate-limit';
 
 // ============================================
-// Extend Express Request type to include user
+// Extend Express Request type
 // ============================================
 
 declare global {
@@ -47,11 +47,13 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     }
 
     // 2. Check blacklist
-    const db = await getDB();
-    const blacklisted = await db.get(
-      'SELECT id FROM token_blacklist WHERE token = ? AND expires_at > datetime("now")',
-      [token]
-    );
+    const supabase = getSupabase();
+    const { data: blacklisted } = await supabase
+      .from('token_blacklist')
+      .select('id')
+      .eq('token', token)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
     
     if (blacklisted) {
       throw new AuthenticationError('Token has been revoked. Please login again.');
@@ -69,8 +71,14 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const decoded = verification.data;
 
     // 4. Get user with role from database
-    const user = await getUserWithRole(decoded.id);
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, full_name, email, role, is_active')
+      .eq('id', decoded.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error || !user) {
       throw new AuthenticationError('User not found');
     }
 
@@ -91,7 +99,6 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    // Handle known error types
     if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
         error: error.message,
@@ -99,7 +106,6 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       });
     }
     
-    // Log unknown errors
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     logger.error('Authentication error:', errorMessage);
     return res.status(401).json({ 
@@ -163,53 +169,13 @@ export const authorize = (...roles: string[]) => {
 };
 
 // ============================================
-// Active User Check Middleware
+// Rate Limiting for Authentication (✅ FIXED - using default keyGenerator)
 // ============================================
 
-export const requireActiveUser = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      throw new AuthenticationError('Authentication required');
-    }
-
-    const db = await getDB();
-    const user = await db.get(
-      'SELECT is_active FROM users WHERE id = ?',
-      [userId]
-    );
-
-    if (!user || !user.is_active) {
-      throw new AuthorizationError('Account is deactivated');
-    }
-
-    next();
-  } catch (error) {
-    if (error instanceof AuthenticationError || error instanceof AuthorizationError) {
-      return res.status(error.statusCode).json({
-        error: error.message,
-        code: error.code
-      });
-    }
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Active user check error:', errorMessage);
-    return res.status(500).json({ 
-      error: 'Failed to verify user status',
-      code: 'USER_CHECK_ERROR'
-    });
-  }
-};
-
-// ============================================
-// Rate Limiting for Authentication
-// ============================================
-
-// ✅ Fixed: use custom keyGenerator with request
+// ✅ استخدام keyGenerator بسيط بدون مشاكل IPv6
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts only
+  max: 5,
   message: {
     error: 'Too many login attempts',
     message: 'Please try again after 15 minutes',
@@ -218,16 +184,12 @@ export const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  keyGenerator: (req: Request) => {
-    const username = (req.body as any)?.username || 'unknown';
-    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-    return `${ip}_${username}`;
-  }
+  // ✅ استخدام keyGenerator افتراضي (بدون مخصص)
 });
 
 export const registerRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // 10 attempts only
+  max: 10,
   message: {
     error: 'Too many registration attempts',
     message: 'Please try again after 1 hour',
@@ -235,10 +197,7 @@ export const registerRateLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => {
-    const ip = req.ip || req.socket?.remoteAddress || 'unknown';
-    return ip;
-  }
+  // ✅ استخدام keyGenerator افتراضي (بدون مخصص)
 });
 
 // ============================================
@@ -248,7 +207,6 @@ export const registerRateLimiter = rateLimit({
 export default {
   authenticate,
   authorize,
-  requireActiveUser,
   authRateLimiter,
   registerRateLimiter
 };

@@ -1,6 +1,6 @@
-// backend/src/controllers/purchase.controller.ts
+// src/controllers/purchase.controller.ts
 import { Request, Response } from 'express';
-import { getDB } from '../config/database.js';
+import { getSupabase } from '../config/database.js';
 import { logActivity } from '../services/audit.service.js';
 import logger from '../config/logger.js';
 import { 
@@ -10,6 +10,7 @@ import {
   ConflictError 
 } from '../types/errors.js';
 import { Cache, CacheKeys, getOrSet } from '../utils/cache.js';
+import PurchaseRepository from '../repositories/purchase.repository.js';
 
 // ============================================
 // Types
@@ -38,10 +39,6 @@ const validatePurchase = (data: any): PurchaseValidationResult => {
   if (!data.requester || data.requester.length < 1) {
     errors.push({ field: 'requester', message: 'Requester is required' });
   }
-  // ✅ التحقق من invoice_owner اختياري - أزل التعليق إذا أردت جعله إلزامياً
-  // if (data.invoice_owner && data.invoice_owner.length < 1) {
-  //   errors.push({ field: 'invoice_owner', message: 'Invoice owner is required' });
-  // }
   if (!data.description || data.description.length < 1) {
     errors.push({ field: 'description', message: 'Description is required' });
   }
@@ -67,7 +64,6 @@ const validatePurchase = (data: any): PurchaseValidationResult => {
 
 export const getAllPurchases = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const { 
       status, 
       startDate, 
@@ -79,61 +75,27 @@ export const getAllPurchases = async (req: Request, res: Response) => {
       sortOrder = 'DESC'
     } = req.query;
 
-    // Convert query params
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 10;
 
-    let whereClause = 'WHERE deleted_at IS NULL';
-    const params: any[] = [];
-
-    if (status && status !== 'all' && status !== '') {
-      whereClause += ' AND status = ?';
-      params.push(status);
-    }
-    
-    if (startDate && startDate !== '') {
-      whereClause += ' AND date >= ?';
-      params.push(startDate);
-    }
-    
-    if (endDate && endDate !== '') {
-      whereClause += ' AND date <= ?';
-      params.push(endDate);
-    }
-    
-    if (search && search !== '') {
-      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR invoice_owner LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
-    }
-
-    const validSortColumns = ['created_at', 'date', 'delivery_date', 'status', 'requester', 'request_number', 'invoice_owner'];
-    const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy : 'created_at';
-    const sortOrderValue = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-    const countResult = await db.get(
-      `SELECT COUNT(*) as total FROM purchases ${whereClause}`,
-      params
-    );
-    const total = countResult.total;
-
-    const offset = (pageNum - 1) * limitNum;
-    const query = `
-      SELECT * FROM purchases 
-      ${whereClause} 
-      ORDER BY ${sortColumn} ${sortOrderValue}
-      LIMIT ? OFFSET ?
-    `;
-    
-    const purchases = await db.all(query, [...params, limitNum, offset]);
+    const result = await PurchaseRepository.findAll({
+      status: status as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+      search: search as string,
+      page: pageNum,
+      limit: limitNum,
+      sortBy: sortBy as string,
+      sortOrder: sortOrder as 'ASC' | 'DESC'
+    });
 
     res.json({
-      data: purchases,
+      data: result.data,
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum)
+        total: result.total,
+        totalPages: Math.ceil(result.total / limitNum)
       }
     });
   } catch (error) {
@@ -152,15 +114,12 @@ export const getAllPurchases = async (req: Request, res: Response) => {
 export const getPurchaseById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const db = await getDB();
+    const purchaseId = parseInt(id);
     
     const purchase = await getOrSet(
-      CacheKeys.PURCHASE(parseInt(id)),
+      CacheKeys.PURCHASE(purchaseId),
       async () => {
-        return await db.get(
-          'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
-          [id]
-        );
+        return await PurchaseRepository.findById(purchaseId);
       }
     );
     
@@ -168,7 +127,7 @@ export const getPurchaseById = async (req: Request, res: Response) => {
       throw new NotFoundError('Purchase not found');
     }
     
-    // ✅ تأكد من وجود invoice_owner
+    // Ensure invoice_owner exists
     if (!purchase.invoice_owner) {
       purchase.invoice_owner = '';
     }
@@ -197,13 +156,12 @@ export const getPurchaseById = async (req: Request, res: Response) => {
 
 export const createPurchase = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { 
       request_number, 
       date, 
       requester, 
-      invoice_owner,  // ✅ إضافة
+      invoice_owner,
       description, 
       receiver, 
       delivery_date, 
@@ -216,10 +174,8 @@ export const createPurchase = async (req: Request, res: Response) => {
       throw new ValidationError('Validation failed', validation.errors);
     }
 
-    const existing = await db.get(
-      'SELECT id FROM purchases WHERE request_number = ? AND deleted_at IS NULL',
-      [request_number]
-    );
+    // Check if request number exists
+    const existing = await PurchaseRepository.findByRequestNumber(request_number);
     if (existing) {
       throw new ConflictError('Request number already exists');
     }
@@ -228,38 +184,26 @@ export const createPurchase = async (req: Request, res: Response) => {
       throw new ValidationError('Delivery date must be after request date');
     }
 
-    // ✅ معالجة invoice_owner
-    const invoiceOwnerValue = invoice_owner || '';
-
-    const result = await db.run(
-      `INSERT INTO purchases (request_number, date, requester, invoice_owner, description, receiver, delivery_date, status, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        request_number, 
-        date, 
-        requester, 
-        invoiceOwnerValue,  // ✅ استخدام القيمة المعالجة
-        description, 
-        receiver, 
-        delivery_date, 
-        status || 'قيد التنفيذ', 
-        notes || '',
-        user?.id || null
-      ]
-    );
-    
-    const newPurchase = await db.get(
-      'SELECT * FROM purchases WHERE id = ?',
-      [result.lastID]
-    );
+    const purchase = await PurchaseRepository.create({
+      request_number,
+      date,
+      requester,
+      invoice_owner: invoice_owner || '',
+      description,
+      receiver,
+      delivery_date,
+      status: status || 'قيد التنفيذ',
+      notes: notes || '',
+      created_by: user?.id || null
+    });
 
     await logActivity(
       user?.id,
       user?.username || 'system',
       'PURCHASE_CREATE',
       'purchase',
-      result.lastID,
-      newPurchase,
+      purchase.id,
+      purchase,
       req.ip,
       req.headers['user-agent']
     );
@@ -267,7 +211,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
 
-    res.status(201).json(newPurchase);
+    res.status(201).json(purchase);
   } catch (error) {
     logger.error('Error creating purchase:', error);
     
@@ -292,14 +236,14 @@ export const createPurchase = async (req: Request, res: Response) => {
 
 export const updatePurchase = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { id } = req.params;
+    const purchaseId = parseInt(id);
     const { 
       request_number, 
       date, 
       requester, 
-      invoice_owner,  // ✅ إضافة
+      invoice_owner,
       description, 
       receiver, 
       delivery_date, 
@@ -307,10 +251,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
       notes 
     } = req.body;
 
-    const existing = await db.get(
-      'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
-      [id]
-    );
+    const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
       throw new NotFoundError('Purchase not found');
     }
@@ -328,66 +269,42 @@ export const updatePurchase = async (req: Request, res: Response) => {
       throw new ValidationError('Validation failed', validation.errors);
     }
 
-    const duplicate = await db.get(
-      'SELECT id FROM purchases WHERE request_number = ? AND id != ? AND deleted_at IS NULL',
-      [request_number, id]
-    );
-    if (duplicate) {
-      throw new ConflictError('Request number already used by another purchase');
+    if (request_number && request_number !== existing.request_number) {
+      const duplicate = await PurchaseRepository.findByRequestNumber(request_number);
+      if (duplicate) {
+        throw new ConflictError('Request number already used by another purchase');
+      }
     }
 
     if (delivery_date < date) {
       throw new ValidationError('Delivery date must be after request date');
     }
 
-    const updates: string[] = [];
-    const params: any[] = [];
+    const updateData: any = {};
+    if (request_number !== undefined) updateData.request_number = request_number;
+    if (date !== undefined) updateData.date = date;
+    if (requester !== undefined) updateData.requester = requester;
+    if (invoice_owner !== undefined) updateData.invoice_owner = invoice_owner || '';
+    if (description !== undefined) updateData.description = description;
+    if (receiver !== undefined) updateData.receiver = receiver;
+    if (delivery_date !== undefined) updateData.delivery_date = delivery_date;
+    if (status !== undefined) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
 
-    if (request_number !== undefined) { updates.push('request_number = ?'); params.push(request_number); }
-    if (date !== undefined) { updates.push('date = ?'); params.push(date); }
-    if (requester !== undefined) { updates.push('requester = ?'); params.push(requester); }
-    
-    // ✅ تحديث invoice_owner
-    if (invoice_owner !== undefined) { 
-      updates.push('invoice_owner = ?'); 
-      params.push(invoice_owner || '');
-    }
-    
-    if (description !== undefined) { updates.push('description = ?'); params.push(description); }
-    if (receiver !== undefined) { updates.push('receiver = ?'); params.push(receiver); }
-    if (delivery_date !== undefined) { updates.push('delivery_date = ?'); params.push(delivery_date); }
-    if (status !== undefined) { updates.push('status = ?'); params.push(status); }
-    if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
-
-    if (updates.length === 0) {
-      throw new ValidationError('No valid fields to update');
-    }
-
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    await db.run(
-      `UPDATE purchases SET ${updates.join(', ')} WHERE id = ?`,
-      params
-    );
-    
-    const updated = await db.get(
-      'SELECT * FROM purchases WHERE id = ?',
-      [id]
-    );
+    const updated = await PurchaseRepository.update(purchaseId, updateData);
 
     await logActivity(
       user.id,
       user.username,
       'PURCHASE_UPDATE',
       'purchase',
-      parseInt(id),
+      purchaseId,
       { old: existing, new: updated },
       req.ip,
       req.headers['user-agent']
     );
 
-    Cache.del(CacheKeys.PURCHASE(parseInt(id)));
+    Cache.del(CacheKeys.PURCHASE(purchaseId));
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
 
@@ -419,14 +336,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
 
 export const deletePurchase = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { id } = req.params;
+    const purchaseId = parseInt(id);
 
-    const existing = await db.get(
-      'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
-      [id]
-    );
+    const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
       throw new NotFoundError('Purchase not found');
     }
@@ -439,23 +353,20 @@ export const deletePurchase = async (req: Request, res: Response) => {
       throw new AuthorizationError('You can only delete your own purchases');
     }
 
-    await db.run(
-      'UPDATE purchases SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
-    );
+    await PurchaseRepository.delete(purchaseId);
 
     await logActivity(
       user.id,
       user.username,
       'PURCHASE_DELETE',
       'purchase',
-      parseInt(id),
+      purchaseId,
       existing,
       req.ip,
       req.headers['user-agent']
     );
 
-    Cache.del(CacheKeys.PURCHASE(parseInt(id)));
+    Cache.del(CacheKeys.PURCHASE(purchaseId));
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
 
@@ -491,66 +402,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const stats = await getOrSet(
       CacheKeys.DASHBOARD_STATS(user.id),
       async () => {
-        const db = await getDB();
-        
-        const statsResult = await db.get(`
-          SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN status = 'منجز' THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status = 'قيد التنفيذ' THEN 1 ELSE 0 END) as pending,
-            SUM(CASE WHEN status = 'ملغي' THEN 1 ELSE 0 END) as cancelled,
-            SUM(CASE WHEN status = 'معلق' THEN 1 ELSE 0 END) as inProgress,
-            SUM(CASE WHEN delivery_date < date('now') AND status != 'منجز' AND status != 'ملغي' AND deleted_at IS NULL THEN 1 ELSE 0 END) as delayed,
-            SUM(CASE WHEN delivery_date < date('now', '-2 days') AND status != 'منجز' AND status != 'ملغي' AND deleted_at IS NULL THEN 1 ELSE 0 END) as overdue,
-            SUM(CASE WHEN date(delivery_date) = date('now', '+1 day') AND status != 'منجز' AND status != 'ملغي' AND deleted_at IS NULL THEN 1 ELSE 0 END) as expiringToday,
-            SUM(CASE WHEN date(delivery_date) BETWEEN date('now', '+2 day') AND date('now', '+4 day') AND status != 'منجز' AND status != 'ملغي' AND deleted_at IS NULL THEN 1 ELSE 0 END) as expiringSoon,
-            ROUND(100.0 * SUM(CASE WHEN status = 'منجز' THEN 1 ELSE 0 END) / COUNT(*), 2) as completionRate,
-            ROUND(100.0 * SUM(CASE WHEN delivery_date >= date('now') AND status = 'منجز' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN status = 'منجز' THEN 1 ELSE 0 END), 0), 2) as onTimeRate
-          FROM purchases 
-          WHERE deleted_at IS NULL
-        `);
-
-        const byStatus = await db.all(`
-          SELECT 
-            status, 
-            COUNT(*) as count,
-            ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM purchases WHERE deleted_at IS NULL), 2) as percentage
-          FROM purchases 
-          WHERE deleted_at IS NULL
-          GROUP BY status
-          ORDER BY count DESC
-        `);
-
-        const byRequester = await db.all(`
-          SELECT 
-            requester, 
-            COUNT(*) as count,
-            ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM purchases WHERE deleted_at IS NULL), 2) as percentage
-          FROM purchases 
-          WHERE deleted_at IS NULL
-          GROUP BY requester 
-          ORDER BY count DESC 
-          LIMIT 5
-        `);
-
-        const monthlyTrend = await db.all(`
-          SELECT 
-            strftime('%Y-%m', date) as month,
-            COUNT(*) as count,
-            SUM(CASE WHEN status = 'منجز' THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status != 'منجز' AND status != 'ملغي' THEN 1 ELSE 0 END) as pending
-          FROM purchases 
-          WHERE date >= date('now', '-6 months') AND deleted_at IS NULL
-          GROUP BY month 
-          ORDER BY month
-        `);
-
-        return {
-          ...statsResult,
-          byStatus: byStatus || [],
-          byRequester: byRequester || [],
-          monthlyTrend: monthlyTrend || []
-        };
+        return await PurchaseRepository.getDashboardStats();
       },
       300
     );
@@ -571,60 +423,27 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
 export const searchPurchases = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const { q, status, from, to, page = '1', limit = '20' } = req.query;
     
     const pageNum = parseInt(page as string, 10) || 1;
     const limitNum = parseInt(limit as string, 10) || 20;
 
-    let whereClause = 'WHERE deleted_at IS NULL';
-    const params: any[] = [];
-
-    if (q && q !== '') {
-      whereClause += ' AND (request_number LIKE ? OR requester LIKE ? OR invoice_owner LIKE ? OR description LIKE ? OR receiver LIKE ? OR notes LIKE ?)';
-      const searchTerm = `%${q}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
-    }
-
-    if (status && status !== '' && status !== 'all') {
-      whereClause += ' AND status = ?';
-      params.push(status);
-    }
-
-    if (from && from !== '') {
-      whereClause += ' AND date >= ?';
-      params.push(from);
-    }
-
-    if (to && to !== '') {
-      whereClause += ' AND date <= ?';
-      params.push(to);
-    }
-
-    const countResult = await db.get(
-      `SELECT COUNT(*) as total FROM purchases ${whereClause}`,
-      params
-    );
-    const total = countResult.total;
-
-    const offset = (pageNum - 1) * limitNum;
-    const query = `
-      SELECT * FROM purchases 
-      ${whereClause} 
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `;
-    params.push(limitNum, offset);
-
-    const results = await db.all(query, params);
+    const result = await PurchaseRepository.findAll({
+      search: q as string,
+      status: status as string,
+      startDate: from as string,
+      endDate: to as string,
+      page: pageNum,
+      limit: limitNum
+    });
 
     res.json({
-      data: results,
+      data: result.data,
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum)
+        total: result.total,
+        totalPages: Math.ceil(result.total / limitNum)
       }
     });
   } catch (error) {
@@ -642,20 +461,17 @@ export const searchPurchases = async (req: Request, res: Response) => {
 
 export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { status } = req.body;
     const { id } = req.params;
+    const purchaseId = parseInt(id);
 
     const validStatuses = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
     if (!validStatuses.includes(status)) {
       throw new ValidationError('Invalid status', [`Status must be one of: ${validStatuses.join(', ')}`]);
     }
 
-    const existing = await db.get(
-      'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NULL',
-      [id]
-    );
+    const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
       throw new NotFoundError('Purchase not found');
     }
@@ -672,28 +488,20 @@ export const updateStatus = async (req: Request, res: Response) => {
       throw new ValidationError('Cannot change status of completed or cancelled purchases');
     }
 
-    await db.run(
-      'UPDATE purchases SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [status, id]
-    );
-
-    const updated = await db.get(
-      'SELECT * FROM purchases WHERE id = ?',
-      [id]
-    );
+    const updated = await PurchaseRepository.updateStatus(purchaseId, status);
 
     await logActivity(
       user.id,
       user.username,
       'PURCHASE_STATUS_CHANGE',
       'purchase',
-      parseInt(id),
+      purchaseId,
       { oldStatus: existing.status, newStatus: status },
       req.ip,
       req.headers['user-agent']
     );
 
-    Cache.del(CacheKeys.PURCHASE(parseInt(id)));
+    Cache.del(CacheKeys.PURCHASE(purchaseId));
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
 
@@ -728,7 +536,6 @@ export const updateStatus = async (req: Request, res: Response) => {
 
 export const exportPurchases = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { status, from, to } = req.query;
 
@@ -736,27 +543,28 @@ export const exportPurchases = async (req: Request, res: Response) => {
       throw new AuthorizationError('Only admins and managers can export purchases');
     }
 
-    let query = 'SELECT * FROM purchases WHERE deleted_at IS NULL';
-    const params: any[] = [];
+    const supabase = getSupabase();
+    
+    let query = supabase
+      .from('purchases')
+      .select('*')
+      .is('deleted_at', null);
 
     if (status && status !== '' && status !== 'all') {
-      query += ' AND status = ?';
-      params.push(status);
+      query = query.eq('status', status as string);
     }
 
     if (from && from !== '') {
-      query += ' AND date >= ?';
-      params.push(from);
+      query = query.gte('date', from as string);
     }
 
     if (to && to !== '') {
-      query += ' AND date <= ?';
-      params.push(to);
+      query = query.lte('date', to as string);
     }
 
-    query += ' ORDER BY created_at DESC';
+    const { data: purchases, error } = await query.order('created_at', { ascending: false });
 
-    const purchases = await db.all(query, params);
+    if (error) throw error;
 
     await logActivity(
       user.id,
@@ -764,15 +572,15 @@ export const exportPurchases = async (req: Request, res: Response) => {
       'PURCHASE_EXPORT',
       'purchase',
       undefined,
-      { count: purchases.length, filters: { status, from, to } },
+      { count: purchases?.length || 0, filters: { status, from, to } },
       req.ip,
       req.headers['user-agent']
     );
 
     res.json({
       success: true,
-      count: purchases.length,
-      data: purchases,
+      count: purchases?.length || 0,
+      data: purchases || [],
       exportedAt: new Date().toISOString(),
       exportedBy: user.username
     });
@@ -799,28 +607,10 @@ export const exportPurchases = async (req: Request, res: Response) => {
 
 export const getOverduePurchases = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
-    
     const overdue = await getOrSet(
       CacheKeys.OVERDUE_PURCHASES(),
       async () => {
-        return await db.all(`
-          SELECT 
-            *,
-            julianday('now') - julianday(delivery_date) as days_overdue,
-            CASE 
-              WHEN julianday('now') - julianday(delivery_date) >= 7 THEN 'حرج'
-              WHEN julianday('now') - julianday(delivery_date) >= 2 THEN 'متأخر'
-              WHEN julianday('now') - julianday(delivery_date) >= 1 THEN 'ينتهي اليوم'
-              ELSE 'قريب'
-            END as alert_level
-          FROM purchases 
-          WHERE delivery_date < date('now', '-1 days') 
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-          ORDER BY delivery_date ASC
-        `);
+        return await PurchaseRepository.getOverdue();
       },
       60
     );
@@ -841,23 +631,10 @@ export const getOverduePurchases = async (req: Request, res: Response) => {
 
 export const getExpiringToday = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
-    
     const expiring = await getOrSet(
       CacheKeys.EXPIRING_TODAY(),
       async () => {
-        return await db.all(`
-          SELECT 
-            *,
-            julianday(delivery_date) - julianday('now') as days_remaining,
-            'ينتهي اليوم' as alert_level
-          FROM purchases 
-          WHERE date(delivery_date) = date('now', '+1 day')
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-          ORDER BY delivery_date ASC
-        `);
+        return await PurchaseRepository.getExpiringToday();
       },
       60
     );
@@ -878,61 +655,41 @@ export const getExpiringToday = async (req: Request, res: Response) => {
 
 export const getAlertStats = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
-    
     const stats = await getOrSet(
       CacheKeys.ALERT_STATS(),
       async () => {
-        const overdueCount = await db.get(`
-          SELECT COUNT(*) as count 
-          FROM purchases 
-          WHERE delivery_date < date('now', '-1 days') 
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-        `);
-
-        const expiringCount = await db.get(`
-          SELECT COUNT(*) as count 
-          FROM purchases 
-          WHERE date(delivery_date) = date('now', '+1 day')
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-        `);
-
-        const expiringSoonCount = await db.get(`
-          SELECT COUNT(*) as count 
-          FROM purchases 
-          WHERE date(delivery_date) BETWEEN date('now', '+2 day') AND date('now', '+4 day')
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-        `);
-
-        const mostOverdue = await db.all(`
-          SELECT 
-            id,
-            request_number,
-            requester,
-            description,
-            delivery_date,
-            status,
-            julianday('now') - julianday(delivery_date) as days_overdue
-          FROM purchases 
-          WHERE delivery_date < date('now', '-1 days') 
-            AND status != 'منجز'
-            AND status != 'ملغي'
-            AND deleted_at IS NULL
-          ORDER BY delivery_date ASC
-          LIMIT 5
-        `);
+        const overdue = await PurchaseRepository.getOverdue();
+        const expiringToday = await PurchaseRepository.getExpiringToday();
+        
+        // Get expiring soon (next 2-4 days)
+        const supabase = getSupabase();
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const future4 = new Date(today);
+        future4.setDate(future4.getDate() + 4);
+        
+        const { data: expiringSoon } = await supabase
+          .from('purchases')
+          .select('*')
+          .is('deleted_at', null)
+          .not('status', 'in', '("منجز","ملغي")')
+          .gte('delivery_date', tomorrow.toISOString().split('T')[0])
+          .lte('delivery_date', future4.toISOString().split('T')[0]);
 
         return {
-          overdue: overdueCount?.count || 0,
-          expiringToday: expiringCount?.count || 0,
-          expiringSoon: expiringSoonCount?.count || 0,
-          mostOverdue: mostOverdue || []
+          overdue: overdue.length,
+          expiringToday: expiringToday.length,
+          expiringSoon: expiringSoon?.length || 0,
+          mostOverdue: overdue.slice(0, 5).map(p => ({
+            id: p.id,
+            request_number: p.request_number,
+            requester: p.requester,
+            description: p.description,
+            delivery_date: p.delivery_date,
+            status: p.status,
+            days_overdue: Math.floor((new Date().getTime() - new Date(p.delivery_date).getTime()) / (1000 * 60 * 60 * 24))
+          }))
         };
       },
       60
@@ -1002,44 +759,28 @@ export const getAuditLogsByPurchase = async (req: Request, res: Response) => {
 
 export const restorePurchase = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
     const { id } = req.params;
+    const purchaseId = parseInt(id);
 
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       throw new AuthorizationError('Only admins can restore purchases');
     }
 
-    const existing = await db.get(
-      'SELECT * FROM purchases WHERE id = ? AND deleted_at IS NOT NULL',
-      [id]
-    );
-    if (!existing) {
-      throw new NotFoundError('Deleted purchase not found');
-    }
-
-    await db.run(
-      'UPDATE purchases SET deleted_at = NULL WHERE id = ?',
-      [id]
-    );
-
-    const restored = await db.get(
-      'SELECT * FROM purchases WHERE id = ?',
-      [id]
-    );
+    const restored = await PurchaseRepository.restore(purchaseId);
 
     await logActivity(
       user.id,
       user.username,
       'PURCHASE_RESTORE',
       'purchase',
-      parseInt(id, 10),
+      purchaseId,
       restored,
       req.ip,
       req.headers['user-agent']
     );
 
-    Cache.del(CacheKeys.PURCHASE(parseInt(id, 10)));
+    Cache.del(CacheKeys.PURCHASE(purchaseId));
     Cache.delPrefix('dashboard:stats');
 
     res.json({
@@ -1070,20 +811,22 @@ export const restorePurchase = async (req: Request, res: Response) => {
 
 export const getDeletedPurchases = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const user = (req as any).user;
 
     if (user.role !== 'admin' && user.role !== 'super_admin') {
       throw new AuthorizationError('Only admins can view deleted purchases');
     }
 
-    const purchases = await db.all(`
-      SELECT * FROM purchases 
-      WHERE deleted_at IS NOT NULL
-      ORDER BY deleted_at DESC
-    `);
+    const supabase = getSupabase();
+    const { data: purchases, error } = await supabase
+      .from('purchases')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
 
-    res.json(purchases);
+    if (error) throw error;
+
+    res.json(purchases || []);
   } catch (error) {
     logger.error('Error fetching deleted purchases:', error);
 

@@ -1,4 +1,4 @@
-// backend/src/index.ts
+// src/index.ts
 import './config/env.js';
 import express from 'express';
 import cors from 'cors';
@@ -8,13 +8,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import purchaseRoutes from './routes/purchase.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import backupRoutes from './routes/backup.routes.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { initDB, closeDB } from './config/database.js';
 import { authenticate } from './middleware/auth.middleware.js';
 import { setupSocketHandlers } from './sockets/index.js';
 import logger from './config/logger.js';
 import { authRateLimiter, registerRateLimiter } from './middleware/auth.middleware.js';
-import { runMigrations } from './migrations/index.js';
 import { scheduleBackup, createBackup } from './utils/backup.js';
 
 dotenv.config();
@@ -65,12 +65,16 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+// Rate limiting for auth routes
 app.use('/api/auth/login', authRateLimiter);
 app.use('/api/auth/register', registerRateLimiter);
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/purchases', authenticate, purchaseRoutes);
+app.use('/api', backupRoutes);
 
+// Health check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
@@ -81,6 +85,7 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Stats endpoint
 app.get('/stats', authenticate, (req, res) => {
   if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
     return res.status(403).json({ error: 'Insufficient permissions' });
@@ -88,30 +93,35 @@ app.get('/stats', authenticate, (req, res) => {
   res.json({ message: 'Stats endpoint - under development' });
 });
 
+// Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ============================================
-// 🚀 Start Server with Migrations and Backup
+// 🚀 Start Server
 // ============================================
 
 const startServer = async () => {
   try {
-    // ✅ Initialize database
+    // ✅ Initialize Supabase and create tables
     await initDB();
     logger.info('✅ Database initialized successfully');
     
-    // ✅ Run migrations
-    await runMigrations();
-    logger.info('✅ Migrations completed successfully');
-    
-    // ✅ Create initial backup
-    await createBackup();
-    logger.info('✅ Initial backup created');
+    // ✅ Create initial backup (if needed)
+    try {
+      await createBackup();
+      logger.info('✅ Initial backup created');
+    } catch (error) {
+      logger.warn('⚠️ Initial backup skipped:', error instanceof Error ? error.message : 'Unknown error');
+    }
     
     // ✅ Schedule automatic backups
-    scheduleBackup();
-    logger.info('✅ Backup scheduler started');
+    try {
+      scheduleBackup();
+      logger.info('✅ Backup scheduler started');
+    } catch (error) {
+      logger.warn('⚠️ Backup scheduler skipped:', error instanceof Error ? error.message : 'Unknown error');
+    }
     
     // ✅ Start HTTP server
     httpServer.listen(PORT, HOST, () => {
@@ -121,6 +131,7 @@ const startServer = async () => {
       logger.info(`💚 Health check: http://${HOST}:${PORT}/health`);
       logger.info(`💬 Socket.io running on ws://${HOST}:${PORT}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`🗄️ Database: Supabase (PostgreSQL)`);
     });
   } catch (error) {
     logger.error('❌ Failed to start server:', error);
@@ -145,8 +156,12 @@ const gracefulShutdown = async (signal: string) => {
     logger.info('Database connection closed');
     
     // Create final backup before shutdown
-    await createBackup();
-    logger.info('✅ Final backup created');
+    try {
+      await createBackup();
+      logger.info('✅ Final backup created');
+    } catch (error) {
+      logger.warn('⚠️ Final backup skipped:', error instanceof Error ? error.message : 'Unknown error');
+    }
     
     // Close HTTP server
     httpServer.close(() => { 

@@ -1,5 +1,5 @@
-// backend/src/migrations/index.ts
-import { getDB } from '../config/database.js';
+// src/migrations/index.ts
+import { getSupabase } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
 export interface Migration {
   version: number;
   name: string;
-  up: (db: any) => Promise<void>;
-  down: (db: any) => Promise<void>;
+  up: (supabase: any) => Promise<void>;
+  down: (supabase: any) => Promise<void>;
 }
 
 // ✅ تسجيل جميع الترحيلات
@@ -38,22 +38,32 @@ export const runMigrations = async () => {
   try {
     await loadMigrations();
     
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    // ✅ إنشاء جدول سجل الترحيلات
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        version INTEGER NOT NULL UNIQUE,
-        name TEXT NOT NULL,
-        applied_at TEXT DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // ✅ إنشاء جدول سجل الترحيلات (باستخدام Supabase)
+    try {
+      await supabase.rpc('exec_sql', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS migrations (
+            id SERIAL PRIMARY KEY,
+            version INTEGER NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `
+      });
+    } catch (error) {
+      console.log('⚠️ Could not create migrations table (may already exist)');
+    }
     
     // ✅ الحصول على آخر إصدار تم تطبيقه
-    const lastMigration = await db.get(
-      'SELECT MAX(version) as version FROM migrations'
-    );
+    const { data: lastMigration, error } = await supabase
+      .from('migrations')
+      .select('version')
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
     const currentVersion = lastMigration?.version || 0;
     
     // ✅ تطبيق الترحيلات الجديدة
@@ -61,19 +71,18 @@ export const runMigrations = async () => {
       if (migration.version > currentVersion) {
         console.log(`🔄 Applying migration ${migration.version}: ${migration.name}`);
         
-        // ✅ بدء المعاملة
-        await db.run('BEGIN TRANSACTION');
-        
         try {
-          await migration.up(db);
-          await db.run(
-            'INSERT INTO migrations (version, name) VALUES (?, ?)',
-            [migration.version, migration.name]
-          );
-          await db.run('COMMIT');
+          await migration.up(supabase);
+          
+          await supabase
+            .from('migrations')
+            .insert({
+              version: migration.version,
+              name: migration.name
+            });
+          
           console.log(`✅ Migration ${migration.version} applied successfully`);
         } catch (error) {
-          await db.run('ROLLBACK');
           console.error(`❌ Migration ${migration.version} failed:`, error);
           throw error;
         }
@@ -85,4 +94,8 @@ export const runMigrations = async () => {
     console.error('❌ Migration failed:', error);
     throw error;
   }
+};
+
+export default {
+  runMigrations
 };

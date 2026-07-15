@@ -1,10 +1,14 @@
-// backend/src/utils/backup.ts
+// src/utils/backup.ts
+import { getSupabase } from '../config/database.js';
+import logger from '../config/logger.js';
+import cron from 'node-cron';
 import fs from 'fs';
 import path from 'path';
-import cron from 'node-cron';
-import logger from '../config/logger.js';
 
-const DB_PATH = process.env.DB_PATH || './database.sqlite';
+// ============================================
+// Supabase Backup (استخدام النسخ الاحتياطي المدمج في Supabase)
+// ============================================
+
 const BACKUP_DIR = './backups';
 const MAX_BACKUPS = 10;
 
@@ -16,26 +20,44 @@ export const ensureBackupDir = () => {
   }
 };
 
-// ✅ إنشاء نسخة احتياطية
+// ✅ إنشاء نسخة احتياطية من البيانات (تصدير JSON)
 export const createBackup = async (): Promise<string> => {
   try {
     ensureBackupDir();
     
-    // ✅ التحقق من وجود قاعدة البيانات
-    if (!fs.existsSync(DB_PATH)) {
-      throw new Error(`Database file not found: ${DB_PATH}`);
+    const supabase = getSupabase();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = path.join(BACKUP_DIR, `backup-${timestamp}.json`);
+    
+    // ✅ تصدير جميع الجداول
+    const tables = ['users', 'purchases', 'audit_log', 'sessions', 'token_blacklist', 'password_resets'];
+    const backupData: any = {};
+    
+    for (const table of tables) {
+      const { data, error } = await supabase
+        .from(table)
+        .select('*');
+      
+      if (error) {
+        logger.warn(`⚠️ Could not backup table ${table}:`, error.message);
+        backupData[table] = [];
+      } else {
+        backupData[table] = data || [];
+      }
     }
     
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupPath = path.join(BACKUP_DIR, `database-${timestamp}.sqlite`);
+    backupData._metadata = {
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      tables: tables
+    };
     
-    // ✅ نسخ الملف
-    fs.copyFileSync(DB_PATH, backupPath);
+    fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
     logger.info(`✅ Backup created: ${backupPath}`);
     
     // ✅ حذف النسخ القديمة
     const files = fs.readdirSync(BACKUP_DIR)
-      .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+      .filter(f => f.startsWith('backup-') && f.endsWith('.json'))
       .sort();
     
     while (files.length > MAX_BACKUPS) {
@@ -64,8 +86,30 @@ export const restoreBackup = async (backupFile: string): Promise<void> => {
       throw new Error(`Backup file not found: ${backupFile}`);
     }
     
-    // ✅ نسخ الملف
-    fs.copyFileSync(backupPath, DB_PATH);
+    const backupData = JSON.parse(fs.readFileSync(backupPath, 'utf-8'));
+    const supabase = getSupabase();
+    
+    // ✅ استعادة البيانات (تحذير: سيتم استبدال البيانات الحالية)
+    const tables = ['users', 'purchases', 'audit_log', 'sessions', 'token_blacklist', 'password_resets'];
+    
+    for (const table of tables) {
+      if (backupData[table]) {
+        // حذف البيانات الحالية
+        await supabase.from(table).delete().neq('id', 0);
+        
+        // إدراج البيانات الجديدة
+        if (backupData[table].length > 0) {
+          const { error } = await supabase
+            .from(table)
+            .insert(backupData[table]);
+          
+          if (error) {
+            logger.warn(`⚠️ Could not restore table ${table}:`, error.message);
+          }
+        }
+      }
+    }
+    
     logger.info(`✅ Database restored from: ${backupFile}`);
   } catch (error) {
     logger.error('❌ Restore failed:', error);
@@ -77,14 +121,13 @@ export const restoreBackup = async (backupFile: string): Promise<void> => {
 export const listBackups = (): string[] => {
   ensureBackupDir();
   return fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+    .filter(f => f.startsWith('backup-') && f.endsWith('.json'))
     .sort()
     .reverse();
 };
 
 // ✅ جدولة النسخ الاحتياطي
 export const scheduleBackup = () => {
-  // ✅ التأكد من وجود المجلد
   ensureBackupDir();
   
   // ✅ كل يوم في منتصف الليل
@@ -101,30 +144,16 @@ export const scheduleBackup = () => {
   cron.schedule('0 3 * * 0', async () => {
     logger.info('🔄 Running weekly backup...');
     try {
-      const backupPath = await createBackup();
-      // ✅ إضافة علامة أسبوعي
-      const weeklyPath = backupPath.replace('database-', 'database-weekly-');
-      fs.copyFileSync(backupPath, weeklyPath);
-      logger.info(`✅ Weekly backup created: ${weeklyPath}`);
-    } catch (error) {
-      logger.error('❌ Weekly backup failed:', error);
-    }
-  });
-  
-  // ✅ كل 6 ساعات (نسخة سريعة)
-  cron.schedule('0 */6 * * *', async () => {
-    logger.info('🔄 Running 6-hour backup...');
-    try {
       await createBackup();
     } catch (error) {
-      logger.error('❌ 6-hour backup failed:', error);
+      logger.error('❌ Weekly backup failed:', error);
     }
   });
   
   logger.info('✅ Backup scheduler started');
   logger.info(`📁 Backup directory: ${BACKUP_DIR}`);
   logger.info(`📊 Max backups: ${MAX_BACKUPS}`);
-  logger.info(`⏰ Schedule: Daily at midnight, Weekly on Sunday at 3am, Every 6 hours`);
+  logger.info(`⏰ Schedule: Daily at midnight, Weekly on Sunday at 3am`);
 };
 
 // ✅ إنشاء نسخة احتياطية فورية
@@ -139,7 +168,7 @@ export const createManualBackup = async (): Promise<string> => {
 export const clearBackups = (): void => {
   ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'));
+    .filter(f => f.startsWith('backup-') && f.endsWith('.json'));
   
   for (const file of files) {
     const filePath = path.join(BACKUP_DIR, file);
@@ -154,7 +183,7 @@ export const clearBackups = (): void => {
 export const getBackupSize = (): number => {
   ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR)
-    .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'));
+    .filter(f => f.startsWith('backup-') && f.endsWith('.json'));
   
   let totalSize = 0;
   for (const file of files) {

@@ -61,12 +61,21 @@ export const errorHandler = (
     });
   }
 
-  // Handle database errors
-  if (err.message && err.message.includes('SQLITE')) {
+  // Handle Postgres/Supabase errors
+  if (err.message && (err.message.includes('Postgres') || err.message.includes('Supabase'))) {
     logger.error('Database error:', err);
     return res.status(500).json({
       error: 'Database error',
       code: 'DATABASE_ERROR',
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  // Handle rate limit errors
+  if (err.message && err.message.includes('Too many requests')) {
+    return res.status(429).json({
+      error: 'Too many requests',
+      code: 'RATE_LIMIT_EXCEEDED',
       timestamp: new Date().toISOString()
     });
   }

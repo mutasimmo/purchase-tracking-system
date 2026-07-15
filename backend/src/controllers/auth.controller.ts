@@ -1,6 +1,6 @@
-// backend/src/controllers/auth.controller.ts
+// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
-import { getDB } from '../config/database.js';
+import { getSupabase } from '../config/database.js';
 import { 
   hashPassword, 
   comparePassword, 
@@ -22,6 +22,7 @@ import {
   NotFoundError,
   ConflictError 
 } from '../types/errors.js';
+import UserRepository from '../repositories/user.repository.js';
 
 // ============================================
 // Login
@@ -35,14 +36,17 @@ export const login = async (req: Request, res: Response) => {
       throw new ValidationError('Username and password are required');
     }
 
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    const user = await db.get(
-      'SELECT * FROM users WHERE username = ?',
-      [username]
-    );
+    // Find user by username
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .is('deleted_at', null)
+      .maybeSingle();
     
-    if (!user) {
+    if (error || !user) {
       await logFailedLogin(username, req.ip || '', req.headers['user-agent'] || '');
       throw new AuthenticationError('Invalid username or password');
     }
@@ -60,17 +64,31 @@ export const login = async (req: Request, res: Response) => {
     const token = generateToken(user.id, user.username, user.role);
     const refreshToken = generateRefreshToken(user.id);
 
-    await db.run(
-      `INSERT INTO sessions (user_id, token, device_info, ip_address, expires_at)
-       VALUES (?, ?, ?, ?, datetime('now', '+7 days'))`,
-      [user.id, token, req.headers['user-agent'] || 'unknown', req.ip || 'unknown']
-    );
+    // Save session in Supabase
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await db.run(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
-      [user.id]
-    );
+    await supabase
+      .from('sessions')
+      .insert({
+        user_id: user.id,
+        token: token,
+        device_info: req.headers['user-agent'] || 'unknown',
+        ip_address: req.ip || 'unknown',
+        expires_at: expiresAt.toISOString(),
+        is_active: 1
+      });
 
+    // Update last login
+    await supabase
+      .from('users')
+      .update({ 
+        last_login: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id);
+
+    // Set cookies
     res.cookie('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -85,6 +103,7 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000
     });
 
+    // Log activity
     await logActivity(
       user.id,
       user.username,
@@ -140,15 +159,29 @@ export const register = async (req: Request, res: Response) => {
       throw new ValidationError('Password validation failed', passwordValidation.errors);
     }
 
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    const existingUsername = await db.get('SELECT id FROM users WHERE username = ?', [username]);
+    // Check if username exists
+    const { data: existingUsername } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .is('deleted_at', null)
+      .maybeSingle();
+      
     if (existingUsername) {
       throw new ConflictError('Username already exists');
     }
 
+    // Check if email exists
     if (email) {
-      const existingEmail = await db.get('SELECT id FROM users WHERE email = ?', [email]);
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .is('deleted_at', null)
+        .maybeSingle();
+        
       if (existingEmail) {
         throw new ConflictError('Email already exists');
       }
@@ -156,23 +189,27 @@ export const register = async (req: Request, res: Response) => {
 
     const hashedPassword = await hashPassword(password);
 
-    const result = await db.run(
-      `INSERT INTO users (username, password, full_name, email, role, is_active)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, hashedPassword, full_name, email || null, role || 'user', 1]
-    );
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({
+        username,
+        password: hashedPassword,
+        full_name,
+        email: email || null,
+        role: role || 'user',
+        is_active: 1
+      })
+      .select('id, username, full_name, email, role, is_active, created_at')
+      .single();
 
-    const newUser = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at FROM users WHERE id = ?',
-      [result.lastID]
-    );
+    if (error) throw error;
 
     await logActivity(
-      result.lastID,
+      newUser.id,
       username,
       'REGISTER',
       'user',
-      result.lastID,
+      newUser.id,
       newUser,
       req.ip,
       req.headers['user-agent']
@@ -202,21 +239,24 @@ export const register = async (req: Request, res: Response) => {
 };
 
 // ============================================
-// Logout - ✅ Fixed: works without authenticate
+// Logout
 // ============================================
 
 export const logout = async (req: Request, res: Response) => {
   try {
-    // Get token from cookie or header
     const token = getTokenFromCookie(req) || req.headers.authorization?.substring(7);
-    
-    // Try to get user if available (from authenticate middleware)
     const user = (req as any).user;
     
-    // If token and user exist, blacklist the token
     if (token && user) {
       try {
         await blacklistToken(token, user.id);
+        
+        // Deactivate session
+        const supabase = getSupabase();
+        await supabase
+          .from('sessions')
+          .update({ is_active: 0 })
+          .eq('token', token);
         
         await logActivity(
           user.id,
@@ -229,12 +269,11 @@ export const logout = async (req: Request, res: Response) => {
           req.headers['user-agent']
         );
       } catch (error) {
-        // Don't block logout if blacklisting fails
         logger.warn('Failed to blacklist token during logout:', error);
       }
     }
     
-    // Always clear cookies
+    // Clear cookies
     res.clearCookie('token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -254,7 +293,6 @@ export const logout = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Logout error:', error);
     
-    // Even on error, clear cookies
     try {
       res.clearCookie('token');
       res.clearCookie('refreshToken');
@@ -281,7 +319,7 @@ export const refreshToken = async (req: Request, res: Response) => {
       throw new AuthenticationError('Refresh token required');
     }
 
-    const db = await getDB();
+    const supabase = getSupabase();
     const { verifyRefreshToken } = await import('../config/auth.js');
     const verification = verifyRefreshToken(refreshToken);
     
@@ -291,30 +329,42 @@ export const refreshToken = async (req: Request, res: Response) => {
 
     const decoded = verification.data;
     
-    const user = await db.get(
-      'SELECT id, username, role, is_active FROM users WHERE id = ?',
-      [decoded.id]
-    );
+    // Find user
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, role, is_active')
+      .eq('id', decoded.id)
+      .is('deleted_at', null)
+      .maybeSingle();
     
-    if (!user || !user.is_active) {
+    if (error || !user || !user.is_active) {
       throw new AuthenticationError('User not found or inactive');
     }
 
-    await db.run(
-      'UPDATE sessions SET is_active = 0 WHERE token = ?',
-      [refreshToken]
-    );
+    // Deactivate old session
+    await supabase
+      .from('sessions')
+      .update({ is_active: 0 })
+      .eq('token', refreshToken);
 
     await blacklistToken(refreshToken, user.id);
 
     const newToken = generateToken(user.id, user.username, user.role);
     const newRefreshToken = generateRefreshToken(user.id);
 
-    await db.run(
-      `INSERT INTO sessions (user_id, token, device_info, ip_address, expires_at)
-       VALUES (?, ?, ?, ?, datetime('now', '+7 days'))`,
-      [user.id, newToken, req.headers['user-agent'] || 'unknown', req.ip || 'unknown']
-    );
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await supabase
+      .from('sessions')
+      .insert({
+        user_id: user.id,
+        token: newToken,
+        device_info: req.headers['user-agent'] || 'unknown',
+        ip_address: req.ip || 'unknown',
+        expires_at: expiresAt.toISOString(),
+        is_active: 1
+      });
 
     res.cookie('token', newToken, {
       httpOnly: true,
@@ -363,13 +413,15 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       throw new AuthenticationError('Unauthorized');
     }
 
-    const db = await getDB();
-    const user = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at, last_login FROM users WHERE id = ?',
-      [userId]
-    );
+    const supabase = getSupabase();
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, full_name, email, role, is_active, created_at, last_login')
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
 
-    if (!user) {
+    if (error || !user) {
       throw new NotFoundError('User not found');
     }
 
@@ -409,10 +461,17 @@ export const changePassword = async (req: Request, res: Response) => {
       throw new ValidationError('Password validation failed', passwordValidation.errors);
     }
 
-    const db = await getDB();
-    const user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+    const supabase = getSupabase();
+    
+    // Get user with password
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .is('deleted_at', null)
+      .maybeSingle();
 
-    if (!user) {
+    if (error || !user) {
       throw new NotFoundError('User not found');
     }
 
@@ -422,10 +481,14 @@ export const changePassword = async (req: Request, res: Response) => {
     }
 
     const hashedPassword = await hashPassword(newPassword);
-    await db.run(
-      'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [hashedPassword, userId]
-    );
+    
+    await supabase
+      .from('users')
+      .update({ 
+        password: hashedPassword,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
 
     await revokeAllUserTokens(userId);
 
@@ -477,31 +540,37 @@ export const updateUser = async (req: Request, res: Response) => {
       throw new AuthenticationError('Unauthorized');
     }
 
-    const db = await getDB();
+    const supabase = getSupabase();
     
     if (email) {
-      const existing = await db.get(
-        'SELECT id FROM users WHERE email = ? AND id != ?',
-        [email, userId]
-      );
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .neq('id', userId)
+        .is('deleted_at', null)
+        .maybeSingle();
+        
       if (existing) {
         throw new ConflictError('Email already exists');
       }
     }
 
-    await db.run(
-      `UPDATE users SET 
-        full_name = COALESCE(?, full_name),
-        email = COALESCE(?, email),
-        updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [full_name || null, email || null, userId]
-    );
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+    
+    if (full_name) updateData.full_name = full_name;
+    if (email !== undefined) updateData.email = email || null;
 
-    const updated = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?',
-      [userId]
-    );
+    const { data: updated, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', userId)
+      .select('id, username, full_name, email, role, is_active, created_at, updated_at')
+      .single();
+
+    if (error) throw error;
 
     await logActivity(
       userId,
@@ -541,52 +610,25 @@ export const updateUser = async (req: Request, res: Response) => {
 
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
-    const db = await getDB();
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const offset = (page - 1) * limit;
-    
     const { search, role, isActive } = req.query;
-    
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
-    
-    if (search) {
-      whereClause += ' AND (username LIKE ? OR full_name LIKE ? OR email LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-    }
-    
-    if (role) {
-      whereClause += ' AND role = ?';
-      params.push(role);
-    }
-    
-    if (isActive !== undefined) {
-      whereClause += ' AND is_active = ?';
-      params.push(isActive === 'true' ? 1 : 0);
-    }
-    
-    const countResult = await db.get(
-      `SELECT COUNT(*) as total FROM users ${whereClause}`,
-      params
-    );
-    const total = countResult.total;
-    
-    const users = await db.all(`
-      SELECT id, username, full_name, email, role, is_active, created_at, updated_at, last_login
-      FROM users 
-      ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `, [...params, limit, offset]);
-    
+
+    const result = await UserRepository.findAll({
+      page,
+      limit,
+      search: search as string,
+      role: role as string,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined
+    });
+
     res.json({
-      data: users,
+      data: result.data,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        total: result.total,
+        totalPages: Math.ceil(result.total / limit)
       }
     });
   } catch (error) {
@@ -605,19 +647,14 @@ export const getAllUsers = async (req: Request, res: Response) => {
 export const getUserById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const db = await getDB();
-    
-    const user = await db.get(`
-      SELECT id, username, full_name, email, role, is_active, created_at, updated_at, last_login
-      FROM users 
-      WHERE id = ?
-    `, [id]);
+    const user = await UserRepository.findById(parseInt(id));
     
     if (!user) {
       throw new NotFoundError('User not found');
     }
     
-    res.json(user);
+    const { password, ...userData } = user;
+    res.json(userData);
   } catch (error) {
     logger.error('Error fetching user:', error);
     
@@ -652,42 +689,32 @@ export const createUserByAdmin = async (req: Request, res: Response) => {
       throw new ValidationError('Password validation failed', passwordValidation.errors);
     }
 
-    const db = await getDB();
-    
-    const existing = await db.get('SELECT id FROM users WHERE username = ?', [username]);
-    if (existing) {
-      throw new ConflictError('Username already exists');
-    }
-
-    const hashedPassword = await hashPassword(password);
-
-    const result = await db.run(
-      `INSERT INTO users (username, password, full_name, email, role, is_active)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, hashedPassword, full_name, email || null, role || 'user', is_active !== undefined ? (is_active ? 1 : 0) : 1]
-    );
-
-    const newUser = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at FROM users WHERE id = ?',
-      [result.lastID]
-    );
+    const user = await UserRepository.create({
+      username,
+      password,
+      full_name,
+      email,
+      role: role || 'user'
+    });
 
     const adminId = (req as any).user?.id;
     const adminName = (req as any).user?.username || 'admin';
+    
     await logActivity(
       adminId,
       adminName,
       'USER_CREATE',
       'user',
-      result.lastID,
-      newUser,
+      user.id,
+      user,
       req.ip,
       req.headers['user-agent']
     );
 
+    const { password: _, ...userData } = user;
     res.status(201).json({
       success: true,
-      user: newUser
+      user: userData
     });
   } catch (error) {
     logger.error('Error creating user by admin:', error);
@@ -716,90 +743,48 @@ export const updateUserByAdmin = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { full_name, email, role, is_active, password } = req.body;
     
-    const db = await getDB();
-    
-    const existing = await db.get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existing) {
+    const user = await UserRepository.findById(parseInt(id));
+    if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    if (existing.username === 'admin' && role && role !== 'admin') {
+    if (user.username === 'admin' && role && role !== 'admin') {
       throw new AuthorizationError('Cannot change admin role');
     }
 
-    let updates: string[] = [];
-    const params: any[] = [];
-    
-    if (full_name) {
-      updates.push('full_name = ?');
-      params.push(full_name);
-    }
-    
-    if (email) {
-      const existingEmail = await db.get(
-        'SELECT id FROM users WHERE email = ? AND id != ?',
-        [email, id]
-      );
-      if (existingEmail) {
-        throw new ConflictError('Email already exists');
-      }
-      updates.push('email = ?');
-      params.push(email);
-    }
-    
-    if (role) {
-      updates.push('role = ?');
-      params.push(role);
-    }
-    
-    if (is_active !== undefined) {
-      updates.push('is_active = ?');
-      params.push(is_active ? 1 : 0);
-    }
-    
+    const updateData: any = {};
+    if (full_name) updateData.full_name = full_name;
+    if (email !== undefined) updateData.email = email;
+    if (role) updateData.role = role;
+    if (is_active !== undefined) updateData.is_active = is_active ? 1 : 0;
     if (password && password.length >= 8) {
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.valid) {
         throw new ValidationError('Password validation failed', passwordValidation.errors);
       }
-      const hashedPassword = await hashPassword(password);
-      updates.push('password = ?');
-      params.push(hashedPassword);
+      updateData.password = password;
     }
-    
-    if (updates.length === 0) {
-      throw new ValidationError('No valid fields to update');
-    }
-    
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-    
-    await db.run(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
-      params
-    );
 
-    const updated = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?',
-      [id]
-    );
+    const updated = await UserRepository.update(parseInt(id), updateData);
 
     const adminId = (req as any).user?.id;
     const adminName = (req as any).user?.username || 'admin';
+    
     await logActivity(
       adminId,
       adminName,
       'USER_UPDATE',
       'user',
       parseInt(id),
-      { old: existing, new: updated },
+      { old: user, new: updated },
       req.ip,
       req.headers['user-agent']
     );
 
+    const { password: _, ...userData } = updated;
     res.json({
       success: true,
-      user: updated
+      user: userData
     });
   } catch (error) {
     logger.error('Error updating user by admin:', error);
@@ -823,47 +808,45 @@ export const updateUserByAdmin = async (req: Request, res: Response) => {
 };
 
 // ============================================
-// Admin: Delete User (Soft Delete)
+// Admin: Delete User
 // ============================================
 
 export const deleteUserByAdmin = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const db = await getDB();
+    const userId = parseInt(id);
     
-    const existing = await db.get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existing) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    if (existing.username === 'admin' || existing.username === 'mutasim') {
+    if (user.username === 'admin' || user.username === 'mutasim') {
       throw new AuthorizationError('Cannot delete admin user');
     }
 
     const currentUser = (req as any).user;
-    if (currentUser.id === parseInt(id)) {
+    if (currentUser.id === userId) {
       throw new AuthorizationError('Cannot delete your own account');
     }
 
+    await UserRepository.delete(userId);
+
     const adminId = currentUser.id;
     const adminName = currentUser.username || 'admin';
+    
     await logActivity(
       adminId,
       adminName,
       'USER_DELETE',
       'user',
-      parseInt(id),
-      existing,
+      userId,
+      user,
       req.ip,
       req.headers['user-agent']
     );
 
-    await db.run(
-      'UPDATE users SET is_active = 0, deleted_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
-    );
-
-    await revokeAllUserTokens(parseInt(id));
+    await revokeAllUserTokens(userId);
 
     res.json({ 
       success: true, 
@@ -894,57 +877,50 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { is_active } = req.body;
+    const userId = parseInt(id);
     
     if (is_active === undefined) {
       throw new ValidationError('is_active is required');
     }
 
-    const db = await getDB();
-    
-    const existing = await db.get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existing) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    if ((existing.username === 'admin' || existing.username === 'mutasim') && !is_active) {
+    if ((user.username === 'admin' || user.username === 'mutasim') && !is_active) {
       throw new AuthorizationError('Cannot deactivate admin user');
     }
 
     const currentUser = (req as any).user;
-    if (currentUser.id === parseInt(id)) {
+    if (currentUser.id === userId) {
       throw new AuthorizationError('Cannot change your own status');
     }
 
-    await db.run(
-      'UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [is_active ? 1 : 0, id]
-    );
-
-    const updated = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?',
-      [id]
-    );
+    const updated = await UserRepository.update(userId, { is_active: is_active ? 1 : 0 });
 
     if (!is_active) {
-      await revokeAllUserTokens(parseInt(id));
+      await revokeAllUserTokens(userId);
     }
 
     const adminId = (req as any).user?.id;
     const adminName = (req as any).user?.username || 'admin';
+    
     await logActivity(
       adminId,
       adminName,
       'USER_STATUS',
       'user',
-      parseInt(id),
+      userId,
       { action: is_active ? 'activated' : 'deactivated' },
       req.ip,
       req.headers['user-agent']
     );
 
+    const { password: _, ...userData } = updated;
     res.json({
       success: true,
-      user: updated,
+      user: userData,
       message: `User ${is_active ? 'activated' : 'deactivated'} successfully`
     });
   } catch (error) {
@@ -974,6 +950,7 @@ export const changeUserRole = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
+    const userId = parseInt(id);
     
     if (!role) {
       throw new ValidationError('Role is required');
@@ -984,48 +961,40 @@ export const changeUserRole = async (req: Request, res: Response) => {
       throw new ValidationError('Invalid role', [`Role must be one of: ${validRoles.join(', ')}`]);
     }
 
-    const db = await getDB();
-    
-    const existing = await db.get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existing) {
+    const user = await UserRepository.findById(userId);
+    if (!user) {
       throw new NotFoundError('User not found');
     }
 
-    if (existing.username === 'admin' || existing.username === 'mutasim') {
+    if (user.username === 'admin' || user.username === 'mutasim') {
       throw new AuthorizationError('Cannot change admin role');
     }
 
     const currentUser = (req as any).user;
-    if (currentUser.id === parseInt(id)) {
+    if (currentUser.id === userId) {
       throw new AuthorizationError('Cannot change your own role');
     }
 
-    await db.run(
-      'UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [role, id]
-    );
-
-    const updated = await db.get(
-      'SELECT id, username, full_name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?',
-      [id]
-    );
+    const updated = await UserRepository.update(userId, { role });
 
     const adminId = currentUser.id;
     const adminName = currentUser.username || 'admin';
+    
     await logActivity(
       adminId,
       adminName,
       'USER_ROLE_CHANGE',
       'user',
-      parseInt(id),
-      { oldRole: existing.role, newRole: role },
+      userId,
+      { oldRole: user.role, newRole: role },
       req.ip,
       req.headers['user-agent']
     );
 
+    const { password: _, ...userData } = updated;
     res.json({
       success: true,
-      user: updated,
+      user: userData,
       message: `User role changed to ${role} successfully`
     });
   } catch (error) {

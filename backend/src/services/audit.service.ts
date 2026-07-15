@@ -1,5 +1,5 @@
 // src/services/audit.service.ts
-import { getDB } from '../config/database.js';
+import { getSupabase } from '../config/database.js';
 import logger from '../config/logger.js';
 import type { AuditLog, AuditLogFilter, AuditLogResponse } from '../models/audit.model.js';
 
@@ -17,28 +17,23 @@ export const logActivity = async (
   ipAddress?: string,
   userAgent?: string
 ) => {
-  // Use setImmediate for async logging
   setImmediate(async () => {
     try {
-      const db = await getDB();
-      
-      // Sanitize sensitive data
+      const supabase = getSupabase();
       const sanitizedChanges = sanitizeChanges(changes);
       
-      await db.run(
-        `INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, changes, ip_address, user_agent)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          userId || null,
-          username || 'system',
-          action,
-          entityType,
-          entityId || null,
-          sanitizedChanges ? JSON.stringify(sanitizedChanges) : null,
-          ipAddress || null,
-          userAgent || null
-        ]
-      );
+      await supabase
+        .from('audit_log')
+        .insert({
+          user_id: userId || null,
+          username: username || 'system',
+          action: action,
+          entity_type: entityType,
+          entity_id: entityId || null,
+          changes: sanitizedChanges ? JSON.stringify(sanitizedChanges) : null,
+          ip_address: ipAddress || null,
+          user_agent: userAgent || null
+        });
       
       logger.debug(`Audit log: ${action} on ${entityType} by ${username}`);
     } catch (error) {
@@ -81,57 +76,42 @@ const sanitizeChanges = (changes: any): any => {
 
 export const getAuditLogs = async (filters: AuditLogFilter): Promise<AuditLogResponse> => {
   try {
-    const db = await getDB();
+    const supabase = getSupabase();
     const { userId, action, entityType, startDate, endDate, page = 1, limit = 20 } = filters;
     
-    let whereClause = 'WHERE 1=1';
-    const params: any[] = [];
+    let query = supabase
+      .from('audit_log')
+      .select('*', { count: 'exact' });
 
     if (userId) {
-      whereClause += ' AND user_id = ?';
-      params.push(userId);
+      query = query.eq('user_id', userId);
     }
     if (action) {
-      whereClause += ' AND action = ?';
-      params.push(action);
+      query = query.eq('action', action);
     }
     if (entityType) {
-      whereClause += ' AND entity_type = ?';
-      params.push(entityType);
+      query = query.eq('entity_type', entityType);
     }
     if (startDate) {
-      whereClause += ' AND created_at >= ?';
-      params.push(startDate);
+      query = query.gte('created_at', startDate);
     }
     if (endDate) {
-      whereClause += ' AND created_at <= ?';
-      params.push(endDate);
+      query = query.lte('created_at', endDate);
     }
 
-    // Get total count
-    const countResult = await db.get(
-      `SELECT COUNT(*) as total FROM audit_log ${whereClause}`,
-      params
-    );
-    const total = countResult.total;
-
-    // Get data with pagination
     const offset = (page - 1) * limit;
-    const query = `
-      SELECT * FROM audit_log 
-      ${whereClause} 
-      ORDER BY created_at DESC 
-      LIMIT ? OFFSET ?
-    `;
-    
-    const data = await db.all(query, [...params, limit, offset]);
+    const { data, error, count } = await query
+      .range(offset, offset + limit - 1)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     
     return {
-      data,
-      total,
+      data: data || [],
+      total: count || 0,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil((count || 0) / limit)
     };
   } catch (error) {
     logger.error('Error fetching audit logs:', error instanceof Error ? error.message : 'Unknown error');
@@ -145,13 +125,16 @@ export const getAuditLogs = async (filters: AuditLogFilter): Promise<AuditLogRes
 
 export const getAuditLogsByEntity = async (entityType: string, entityId: number): Promise<AuditLog[]> => {
   try {
-    const db = await getDB();
-    return await db.all(
-      `SELECT * FROM audit_log 
-       WHERE entity_type = ? AND entity_id = ? 
-       ORDER BY created_at DESC`,
-      [entityType, entityId]
-    );
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('*')
+      .eq('entity_type', entityType)
+      .eq('entity_id', entityId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   } catch (error) {
     logger.error('Error fetching audit logs by entity:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
@@ -164,19 +147,17 @@ export const getAuditLogsByEntity = async (entityType: string, entityId: number)
 
 export const getUserActivityReport = async (userId: number, startDate: string, endDate: string) => {
   try {
-    const db = await getDB();
-    return await db.all(
-      `SELECT 
-         action, 
-         COUNT(*) as count, 
-         DATE(created_at) as date,
-         entity_type
-       FROM audit_log 
-       WHERE user_id = ? AND created_at BETWEEN ? AND ?
-       GROUP BY action, DATE(created_at), entity_type
-       ORDER BY date DESC`,
-      [userId, startDate, endDate]
-    );
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('action, created_at, entity_type')
+      .eq('user_id', userId)
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   } catch (error) {
     logger.error('Error getting user activity report:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
@@ -189,17 +170,19 @@ export const getUserActivityReport = async (userId: number, startDate: string, e
 
 export const cleanupOldLogs = async (daysToKeep: number = 365) => {
   try {
-    const db = await getDB();
+    const supabase = getSupabase();
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
     
-    const result = await db.run(
-      'DELETE FROM audit_log WHERE created_at < ?',
-      [cutoffDate.toISOString()]
-    );
+    const { error } = await supabase
+      .from('audit_log')
+      .delete()
+      .lt('created_at', cutoffDate.toISOString());
+
+    if (error) throw error;
     
-    logger.info(`Cleaned up ${result.changes} old audit logs`);
-    return result.changes;
+    logger.info(`Cleaned up old audit logs`);
+    return 0;
   } catch (error) {
     logger.error('Error cleaning up audit logs:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
@@ -212,22 +195,61 @@ export const cleanupOldLogs = async (daysToKeep: number = 365) => {
 
 export const getAuditStats = async () => {
   try {
-    const db = await getDB();
+    const supabase = getSupabase();
     
-    const total = await db.get('SELECT COUNT(*) as total FROM audit_log');
-    const byAction = await db.all(
-      'SELECT action, COUNT(*) as count FROM audit_log GROUP BY action ORDER BY count DESC'
-    );
-    const byEntity = await db.all(
-      'SELECT entity_type, COUNT(*) as count FROM audit_log GROUP BY entity_type ORDER BY count DESC'
-    );
-    const today = await db.get(
-      'SELECT COUNT(*) as count FROM audit_log WHERE DATE(created_at) = DATE("now")'
-    );
-    
+    // Total count
+    const { count: total, error: totalError } = await supabase
+      .from('audit_log')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) throw totalError;
+
+    // Today's count
+    const today = new Date().toISOString().split('T')[0];
+    const { count: todayCount, error: todayError } = await supabase
+      .from('audit_log')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', today);
+
+    if (todayError) throw todayError;
+
+    // By action - get all logs and group manually
+    const { data: allLogs, error: logsError } = await supabase
+      .from('audit_log')
+      .select('action');
+
+    if (logsError) throw logsError;
+
+    const actionMap = new Map();
+    for (const log of allLogs || []) {
+      actionMap.set(log.action, (actionMap.get(log.action) || 0) + 1);
+    }
+
+    const byAction = Array.from(actionMap.entries()).map(([action, count]) => ({
+      action,
+      count
+    })).sort((a, b) => b.count - a.count);
+
+    // By entity type
+    const { data: entityLogs, error: entityError } = await supabase
+      .from('audit_log')
+      .select('entity_type');
+
+    if (entityError) throw entityError;
+
+    const entityMap = new Map();
+    for (const log of entityLogs || []) {
+      entityMap.set(log.entity_type, (entityMap.get(log.entity_type) || 0) + 1);
+    }
+
+    const byEntity = Array.from(entityMap.entries()).map(([entity_type, count]) => ({
+      entity_type,
+      count
+    })).sort((a, b) => b.count - a.count);
+
     return {
-      total: total.total,
-      today: today.count,
+      total: total || 0,
+      today: todayCount || 0,
       byAction,
       byEntity
     };

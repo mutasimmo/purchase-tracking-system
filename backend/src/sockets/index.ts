@@ -1,17 +1,15 @@
 // src/sockets/index.ts
 import { Server, Socket } from 'socket.io';
 import { verifyToken } from '../config/auth.js';
-import { getDB } from '../config/database.js';
+import { getSupabase } from '../config/database.js';
 import logger from '../config/logger.js';
 
 // ============================================
 // Socket Authentication
 // ============================================
 
-
 export const socketAuth = (socket: Socket, next: (err?: Error) => void) => {
   try {
-    // ✅ إضافة للتصحيح
     console.log('🔑 Socket handshake auth:', socket.handshake.auth);
     
     const token = socket.handshake.auth.token;
@@ -52,11 +50,10 @@ const onlineUsers = new Map<string, OnlineUser>();
 const userSessions = new Map<number, Set<string>>();
 
 // ============================================
-// Setup Socket Handlers - ✅ EXPORTED
+// Setup Socket Handlers
 // ============================================
 
 export const setupSocketHandlers = (io: Server) => {
-  // Use authentication
   io.use(socketAuth);
 
   io.on('connection', (socket: Socket) => {
@@ -91,12 +88,19 @@ export const setupSocketHandlers = (io: Server) => {
         socket.join(room);
         logger.info(`${username} joined room: ${room}`);
 
-        const db = await getDB();
-        await db.run(
-          `INSERT INTO audit_log (user_id, username, action, entity_type, entity_id, changes, ip_address, user_agent)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [userId, username, 'JOIN_ROOM', 'chat', null, JSON.stringify({ room }), socket.handshake.address, socket.handshake.headers['user-agent']]
-        );
+        const supabase = getSupabase();
+        await supabase
+          .from('audit_log')
+          .insert({
+            user_id: userId,
+            username: username,
+            action: 'JOIN_ROOM',
+            entity_type: 'chat',
+            entity_id: null,
+            changes: JSON.stringify({ room }),
+            ip_address: socket.handshake.address,
+            user_agent: socket.handshake.headers['user-agent']
+          });
 
         io.to(room).emit('message', {
           user: 'system',
@@ -188,12 +192,19 @@ export const setupSocketHandlers = (io: Server) => {
       });
 
       try {
-        const db = await getDB();
-        await db.run(
-          `INSERT INTO audit_log (user_id, username, action, entity_type, changes, ip_address, user_agent)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [userId, username, 'DISCONNECT', 'chat', JSON.stringify({ socketId: socket.id }), socket.handshake.address, socket.handshake.headers['user-agent']]
-        );
+        const supabase = getSupabase();
+        await supabase
+          .from('audit_log')
+          .insert({
+            user_id: userId,
+            username: username,
+            action: 'DISCONNECT',
+            entity_type: 'chat',
+            entity_id: null,
+            changes: JSON.stringify({ socketId: socket.id }),
+            ip_address: socket.handshake.address,
+            user_agent: socket.handshake.headers['user-agent']
+          });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.error('Failed to log disconnect:', errorMessage);

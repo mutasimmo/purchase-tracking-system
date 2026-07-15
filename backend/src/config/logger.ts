@@ -1,60 +1,78 @@
 // src/config/logger.ts
 import winston from 'winston';
 import path from 'path';
-import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// Create logs directory if it doesn't exist
-const logDir = 'logs';
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ============================================
+// 📝 Logger Configuration
+// ============================================
+
+const logLevel = process.env.LOG_LEVEL || 'info';
+
+const logFormat = winston.format.combine(
+  winston.format.timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss'
+  }),
+  winston.format.errors({ stack: true }),
+  winston.format.splat(),
+  winston.format.json()
+);
+
+const consoleFormat = winston.format.combine(
+  winston.format.colorize(),
+  winston.format.timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss'
+  }),
+  winston.format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
+    return `${timestamp} ${level}: ${message}${metaStr}`;
+  })
+);
+
+// ============================================
+// 📁 Create logger instance
+// ============================================
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss'
-    }),
-    winston.format.errors({ stack: true }),
-    winston.format.splat(),
-    winston.format.json()
-  ),
-  defaultMeta: {
-    service: 'purchase-api',
-    environment: process.env.NODE_ENV || 'development'
-  },
+  level: logLevel,
+  format: logFormat,
+  defaultMeta: { service: 'purchase-backend' },
   transports: [
-    // Error logs only
+    // ✅ Console output
+    new winston.transports.Console({
+      format: consoleFormat
+    }),
+    // ✅ File output - errors
     new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
+      filename: path.join(__dirname, '../../logs/error.log'),
       level: 'error',
       maxsize: 5242880, // 5MB
-      maxFiles: 5,
+      maxFiles: 5
     }),
-    // All logs
+    // ✅ File output - all logs
     new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 5242880,
-      maxFiles: 5,
-    }),
-    // Auth logs
-    new winston.transports.File({
-      filename: path.join(logDir, 'auth.log'),
-      level: 'info',
-      maxsize: 5242880,
-      maxFiles: 5,
-    }),
-  ],
+      filename: path.join(__dirname, '../../logs/combined.log'),
+      maxsize: 5242880, // 5MB
+      maxFiles: 5
+    })
+  ]
 });
 
-// In development, add console with pretty format
-if (process.env.NODE_ENV === 'development') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
-}
+// ============================================
+// 🚀 Stream for Morgan
+// ============================================
+
+export const stream = {
+  write: (message: string) => {
+    logger.info(message.trim());
+  }
+};
+
+// ============================================
+// 📤 Export logger
+// ============================================
 
 export default logger;
