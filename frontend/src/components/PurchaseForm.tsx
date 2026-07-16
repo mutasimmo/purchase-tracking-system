@@ -68,21 +68,17 @@ const PurchaseForm: React.FC<Props> = ({
         status: purchase.status || 'قيد التنفيذ',
         notes: purchase.notes || ''
       });
-    } else if (nextRequestNumber && !formData.request_number) {
-      setFormData(prev => ({
-        ...prev,
-        request_number: nextRequestNumber
-      }));
     }
-  }, [purchase, nextRequestNumber]);
+  }, [purchase]);
 
   // ============================================
-  // ✅ التحقق من صحة البيانات
+  // ✅ التحقق من صحة البيانات - النسخة المعدلة (الحقول الأساسية فقط)
   // ============================================
 
   const validateForm = (data: typeof formData): Record<string, string> => {
     const errors: Record<string, string> = {};
     
+    // ✅ الحقول الأساسية فقط (مطلوبة)
     if (!data.request_number.trim()) {
       errors.request_number = 'رقم الطلب مطلوب';
     }
@@ -99,14 +95,18 @@ const PurchaseForm: React.FC<Props> = ({
       errors.description = 'وصف الطلب مطلوب';
     }
     
+    // ✅ الحقول الاختيارية - تنبيه فقط وليس خطأ
     if (!data.receiver.trim()) {
-      errors.receiver = 'المستلم مطلوب';
+      // ⚠️ تنبيه فقط، وليس خطأ إلزامي
+      // errors.receiver = 'المستلم مطلوب (يمكن تركه فارغاً)';
     }
     
     if (!data.delivery_date) {
-      errors.delivery_date = 'تاريخ التسليم مطلوب';
+      // ⚠️ تنبيه فقط، وليس خطأ إلزامي
+      // errors.delivery_date = 'تاريخ التسليم مطلوب (سيتم تعيينه تلقائياً)';
     }
     
+    // ✅ التحقق من صحة التواريخ فقط إذا تم إرسال كليهما
     if (data.date && data.delivery_date && data.delivery_date < data.date) {
       errors.delivery_date = 'تاريخ التسليم يجب أن يكون بعد تاريخ الطلب';
     }
@@ -169,13 +169,17 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
-    // ✅ التأكد من وجود receiver و delivery_date مع قيم افتراضية
+    // ✅ إعداد البيانات للإرسال (مع قيم افتراضية للحقول الاختيارية)
     const submitData = {
-      ...formData,
-      receiver: formData.receiver.trim() || formData.requester,
-      delivery_date: formData.delivery_date || formData.date,
-      invoice_owner: formData.invoice_owner || '',
-      notes: formData.notes || ''
+      request_number: formData.request_number.trim(),
+      date: formData.date,
+      requester: formData.requester.trim(),
+      invoice_owner: formData.invoice_owner?.trim() || '',
+      description: formData.description.trim(),
+      receiver: formData.receiver?.trim() || 'غير محدد',        // ✅ قيمة افتراضية
+      delivery_date: formData.delivery_date || new Date().toISOString().split('T')[0], // ✅ قيمة افتراضية
+      status: formData.status || 'قيد التنفيذ',
+      notes: formData.notes?.trim() || ''
     };
     
     console.log('📤 Submitting data:', submitData);
@@ -302,23 +306,16 @@ const PurchaseForm: React.FC<Props> = ({
             value={formData.invoice_owner}
             onChange={handleChange}
             onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.invoice_owner && touched.invoice_owner ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="اسم صاحب الفاتورة"
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="اسم صاحب الفاتورة (اختياري)"
           />
-          {errors.invoice_owner && touched.invoice_owner && (
-            <p className="text-red-500 text-xs mt-1">{errors.invoice_owner}</p>
-          )}
-          {!errors.invoice_owner && formData.invoice_owner && (
-            <p className="text-green-500 text-xs mt-1">✅ صاحب الفاتورة: {formData.invoice_owner}</p>
-          )}
+          <p className="text-xs text-gray-400 mt-1">اختياري - يمكن تركه فارغاً</p>
         </div>
         
-        {/* المستلم */}
+        {/* المستلم - أصبح اختيارياً */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            المستلم <span className="text-red-500">*</span>
+            المستلم <span className="text-gray-400">(اختياري)</span>
           </label>
           <input
             type="text"
@@ -329,11 +326,13 @@ const PurchaseForm: React.FC<Props> = ({
             className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
               errors.receiver && touched.receiver ? 'border-red-500' : 'border-gray-300'
             }`}
-            required
-            placeholder="اسم المستلم"
+            placeholder="اسم المستلم (سيتم تعيين قيمة افتراضية)"
           />
           {errors.receiver && touched.receiver && (
             <p className="text-red-500 text-xs mt-1">{errors.receiver}</p>
+          )}
+          {!errors.receiver && (
+            <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين "غير محدد" تلقائياً إذا تركت فارغاً</p>
           )}
         </div>
         
@@ -359,10 +358,10 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
-        {/* تاريخ التسليم */}
+        {/* تاريخ التسليم - أصبح اختيارياً */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            تاريخ التسليم <span className="text-red-500">*</span>
+            تاريخ التسليم <span className="text-gray-400">(اختياري)</span>
           </label>
           <input
             type="date"
@@ -373,10 +372,13 @@ const PurchaseForm: React.FC<Props> = ({
             className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
               errors.delivery_date && touched.delivery_date ? 'border-red-500' : 'border-gray-300'
             }`}
-            required
+            placeholder="اختياري"
           />
           {errors.delivery_date && touched.delivery_date && (
             <p className="text-red-500 text-xs mt-1">{errors.delivery_date}</p>
+          )}
+          {!errors.delivery_date && (
+            <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين تاريخ اليوم تلقائياً إذا تركت فارغاً</p>
           )}
         </div>
         

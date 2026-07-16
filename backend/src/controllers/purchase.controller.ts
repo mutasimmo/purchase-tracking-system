@@ -22,37 +22,41 @@ interface PurchaseValidationResult {
 }
 
 // ============================================
-// Validation Functions
+// ✅ Validation Functions - النسخة النهائية
 // ============================================
 
 const validatePurchase = (data: any): PurchaseValidationResult => {
   const errors: { field: string; message: string }[] = [];
   
-  if (!data.request_number || data.request_number.length < 1) {
-    errors.push({ field: 'request_number', message: 'Request number is required' });
+  // ✅ الحقول الأساسية فقط (مطلوبة)
+  if (!data.request_number || data.request_number.trim().length < 1) {
+    errors.push({ field: 'request_number', message: 'رقم الطلب مطلوب' });
   }
   if (!data.date) {
-    errors.push({ field: 'date', message: 'Date is required' });
+    errors.push({ field: 'date', message: 'التاريخ مطلوب' });
   } else if (!/^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
-    errors.push({ field: 'date', message: 'Invalid date format (YYYY-MM-DD)' });
+    errors.push({ field: 'date', message: 'صيغة التاريخ غير صحيحة (YYYY-MM-DD)' });
   }
-  if (!data.requester || data.requester.length < 1) {
-    errors.push({ field: 'requester', message: 'Requester is required' });
+  if (!data.requester || data.requester.trim().length < 1) {
+    errors.push({ field: 'requester', message: 'اسم الطالب مطلوب' });
   }
-  if (!data.description || data.description.length < 1) {
-    errors.push({ field: 'description', message: 'Description is required' });
-  }
-  if (!data.receiver || data.receiver.length < 1) {
-    errors.push({ field: 'receiver', message: 'Receiver is required' });
-  }
-  if (!data.delivery_date) {
-    errors.push({ field: 'delivery_date', message: 'Delivery date is required' });
-  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(data.delivery_date)) {
-    errors.push({ field: 'delivery_date', message: 'Invalid date format (YYYY-MM-DD)' });
+  if (!data.description || data.description.trim().length < 1) {
+    errors.push({ field: 'description', message: 'الوصف مطلوب' });
   }
   
-  if (data.date && data.delivery_date && data.delivery_date < data.date) {
-    errors.push({ field: 'delivery_date', message: 'Delivery date must be after request date' });
+  // ✅ الحقول الاختيارية - فقط تحقق من الصيغة إذا تم إرسالها
+  if (data.receiver && data.receiver.trim().length < 1) {
+    errors.push({ field: 'receiver', message: 'لا يمكن أن يكون المستلم فارغاً' });
+  }
+  
+  if (data.delivery_date) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.delivery_date)) {
+      errors.push({ field: 'delivery_date', message: 'صيغة تاريخ التسليم غير صحيحة (YYYY-MM-DD)' });
+    }
+    // التحقق من أن تاريخ التسليم بعد تاريخ الطلب (فقط إذا تم إرسال كلا التاريخين)
+    if (data.date && data.delivery_date && data.delivery_date < data.date) {
+      errors.push({ field: 'delivery_date', message: 'تاريخ التسليم يجب أن يكون بعد تاريخ الطلب' });
+    }
   }
   
   return { valid: errors.length === 0, errors };
@@ -90,6 +94,7 @@ export const getAllPurchases = async (req: Request, res: Response) => {
     });
 
     res.json({
+      success: true,
       data: result.data,
       pagination: {
         page: pageNum,
@@ -101,7 +106,8 @@ export const getAllPurchases = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error fetching purchases:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch purchases',
+      success: false,
+      error: 'فشل في جلب الطلبات',
       code: 'SERVER_ERROR'
     });
   }
@@ -124,7 +130,7 @@ export const getPurchaseById = async (req: Request, res: Response) => {
     );
     
     if (!purchase) {
-      throw new NotFoundError('Purchase not found');
+      throw new NotFoundError('الطلب غير موجود');
     }
     
     // Ensure invoice_owner exists
@@ -132,26 +138,31 @@ export const getPurchaseById = async (req: Request, res: Response) => {
       purchase.invoice_owner = '';
     }
     
-    res.json(purchase);
+    res.json({
+      success: true,
+      data: purchase
+    });
   } catch (error) {
     logger.error('Error fetching purchase:', error);
     
     if (error instanceof NotFoundError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code
       });
     }
     
     res.status(500).json({ 
-      error: 'Failed to fetch purchase',
+      success: false,
+      error: 'فشل في جلب الطلب',
       code: 'SERVER_ERROR'
     });
   }
 };
 
 // ============================================
-// Create New Purchase (✅ مع سجلات مفصلة)
+// ✅ Create New Purchase - النسخة النهائية
 // ============================================
 
 export const createPurchase = async (req: Request, res: Response) => {
@@ -166,7 +177,9 @@ export const createPurchase = async (req: Request, res: Response) => {
       receiver, 
       delivery_date, 
       status, 
-      notes 
+      notes,
+      priority,
+      department
     } = req.body;
 
     // ✅ سجل البيانات المستلمة
@@ -180,6 +193,8 @@ export const createPurchase = async (req: Request, res: Response) => {
       delivery_date,
       status,
       notes,
+      priority,
+      department,
       user_id: user?.id,
       user_role: user?.role
     });
@@ -188,7 +203,7 @@ export const createPurchase = async (req: Request, res: Response) => {
     const validation = validatePurchase(req.body);
     if (!validation.valid) {
       console.log('❌ [createPurchase] Validation failed:', validation.errors);
-      throw new ValidationError('Validation failed', validation.errors);
+      throw new ValidationError('بيانات غير صالحة', validation.errors);
     }
     console.log('✅ [createPurchase] Validation passed');
 
@@ -196,29 +211,24 @@ export const createPurchase = async (req: Request, res: Response) => {
     const existing = await PurchaseRepository.findByRequestNumber(request_number);
     if (existing) {
       console.log('❌ [createPurchase] Request number already exists:', request_number);
-      throw new ConflictError('Request number already exists');
+      throw new ConflictError('رقم الطلب موجود مسبقاً');
     }
     console.log('✅ [createPurchase] Request number is unique');
 
-    // ✅ التحقق من تاريخ التسليم
-    if (delivery_date < date) {
-      console.log('❌ [createPurchase] Invalid delivery date:', { delivery_date, date });
-      throw new ValidationError('Delivery date must be after request date');
-    }
-    console.log('✅ [createPurchase] Delivery date is valid');
-
-    // ✅ إنشاء الطلب
+    // ✅ إنشاء الطلب مع القيم الافتراضية
     console.log('📤 [createPurchase] Calling PurchaseRepository.create...');
     const purchase = await PurchaseRepository.create({
-      request_number,
-      date,
-      requester,
-      invoice_owner: invoice_owner || '',
-      description,
-      receiver,
-      delivery_date,
+      request_number: request_number.trim(),
+      date: date,
+      requester: requester.trim(),
+      invoice_owner: invoice_owner?.trim() || '',
+      description: description.trim(),
+      receiver: receiver?.trim() || 'غير محدد',
+      delivery_date: delivery_date || new Date().toISOString().split('T')[0],
       status: status || 'قيد التنفيذ',
       notes: notes || '',
+      priority: priority || 'medium',
+      department: department || '',
       created_by: user?.id || null
     });
     console.log('✅ [createPurchase] Purchase created successfully, ID:', purchase.id);
@@ -241,7 +251,11 @@ export const createPurchase = async (req: Request, res: Response) => {
     Cache.delPrefix('alerts:');
     console.log('✅ [createPurchase] Cache cleared');
 
-    res.status(201).json(purchase);
+    res.status(201).json({
+      success: true,
+      message: 'تم إنشاء الطلب بنجاح',
+      data: purchase
+    });
   } catch (error) {
     // ✅ سجل الخطأ بالتفصيل
     console.error('❌ [createPurchase] Error:', {
@@ -251,16 +265,26 @@ export const createPurchase = async (req: Request, res: Response) => {
     });
     logger.error('Error creating purchase:', error);
     
-    if (error instanceof ValidationError || error instanceof ConflictError) {
-      return res.status(error.statusCode).json({
+    if (error instanceof ValidationError) {
+      return res.status(400).json({
+        success: false,
         error: error.message,
         code: error.code,
-        details: error instanceof ValidationError ? error.errors : undefined
+        details: error.errors
+      });
+    }
+    
+    if (error instanceof ConflictError) {
+      return res.status(409).json({
+        success: false,
+        error: error.message,
+        code: error.code
       });
     }
     
     res.status(500).json({ 
-      error: 'Failed to create purchase',
+      success: false,
+      error: 'فشل في إنشاء الطلب',
       code: 'SERVER_ERROR',
       details: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.message : undefined : undefined
     });
@@ -285,36 +309,38 @@ export const updatePurchase = async (req: Request, res: Response) => {
       receiver, 
       delivery_date, 
       status, 
-      notes 
+      notes,
+      priority,
+      department
     } = req.body;
 
     const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
-      throw new NotFoundError('Purchase not found');
+      throw new NotFoundError('الطلب غير موجود');
     }
 
     if (user.role !== 'admin' && user.role !== 'super_admin' && existing.requester !== user.username) {
-      throw new AuthorizationError('You can only update your own purchases');
+      throw new AuthorizationError('يمكنك فقط تحديث طلباتك الخاصة');
     }
 
     if (status && status !== existing.status && user.role !== 'admin' && user.role !== 'super_admin') {
-      throw new AuthorizationError('Only admins can change status');
+      throw new AuthorizationError('فقط المدير يمكنه تغيير الحالة');
     }
 
     const validation = validatePurchase(req.body);
     if (!validation.valid) {
-      throw new ValidationError('Validation failed', validation.errors);
+      throw new ValidationError('بيانات غير صالحة', validation.errors);
     }
 
     if (request_number && request_number !== existing.request_number) {
       const duplicate = await PurchaseRepository.findByRequestNumber(request_number);
       if (duplicate) {
-        throw new ConflictError('Request number already used by another purchase');
+        throw new ConflictError('رقم الطلب مستخدم من قبل طلب آخر');
       }
     }
 
-    if (delivery_date < date) {
-      throw new ValidationError('Delivery date must be after request date');
+    if (delivery_date && date && delivery_date < date) {
+      throw new ValidationError('تاريخ التسليم يجب أن يكون بعد تاريخ الطلب');
     }
 
     const updateData: any = {};
@@ -323,10 +349,12 @@ export const updatePurchase = async (req: Request, res: Response) => {
     if (requester !== undefined) updateData.requester = requester;
     if (invoice_owner !== undefined) updateData.invoice_owner = invoice_owner || '';
     if (description !== undefined) updateData.description = description;
-    if (receiver !== undefined) updateData.receiver = receiver;
+    if (receiver !== undefined) updateData.receiver = receiver || 'غير محدد';
     if (delivery_date !== undefined) updateData.delivery_date = delivery_date;
     if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
+    if (priority !== undefined) updateData.priority = priority;
+    if (department !== undefined) updateData.department = department;
 
     const updated = await PurchaseRepository.update(purchaseId, updateData);
 
@@ -345,7 +373,11 @@ export const updatePurchase = async (req: Request, res: Response) => {
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
 
-    res.json(updated);
+    res.json({
+      success: true,
+      message: 'تم تحديث الطلب بنجاح',
+      data: updated
+    });
   } catch (error) {
     logger.error('Error updating purchase:', error);
     
@@ -354,6 +386,7 @@ export const updatePurchase = async (req: Request, res: Response) => {
         error instanceof AuthorizationError ||
         error instanceof ConflictError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code,
         details: error instanceof ValidationError ? error.errors : undefined
@@ -361,7 +394,8 @@ export const updatePurchase = async (req: Request, res: Response) => {
     }
     
     res.status(500).json({ 
-      error: 'Failed to update purchase',
+      success: false,
+      error: 'فشل في تحديث الطلب',
       code: 'SERVER_ERROR'
     });
   }
@@ -379,15 +413,15 @@ export const deletePurchase = async (req: Request, res: Response) => {
 
     const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
-      throw new NotFoundError('Purchase not found');
+      throw new NotFoundError('الطلب غير موجود');
     }
 
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'manager') {
-      throw new AuthorizationError('Only admins and managers can delete purchases');
+      throw new AuthorizationError('فقط المديرين يمكنهم حذف الطلبات');
     }
 
     if (user.role === 'manager' && existing.requester !== user.username) {
-      throw new AuthorizationError('You can only delete your own purchases');
+      throw new AuthorizationError('يمكنك فقط حذف طلباتك الخاصة');
     }
 
     await PurchaseRepository.delete(purchaseId);
@@ -409,20 +443,22 @@ export const deletePurchase = async (req: Request, res: Response) => {
 
     res.status(200).json({ 
       success: true, 
-      message: 'Purchase deleted successfully' 
+      message: 'تم حذف الطلب بنجاح' 
     });
   } catch (error) {
     logger.error('Delete error:', error);
     
     if (error instanceof NotFoundError || error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code
       });
     }
     
     res.status(500).json({ 
-      error: 'Failed to delete purchase',
+      success: false,
+      error: 'فشل في حذف الطلب',
       code: 'SERVER_ERROR'
     });
   }
@@ -448,7 +484,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error fetching dashboard stats:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch statistics',
+      success: false,
+      error: 'فشل في جلب الإحصائيات',
       code: 'SERVER_ERROR'
     });
   }
@@ -475,6 +512,7 @@ export const searchPurchases = async (req: Request, res: Response) => {
     });
 
     res.json({
+      success: true,
       data: result.data,
       pagination: {
         page: pageNum,
@@ -486,14 +524,15 @@ export const searchPurchases = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error searching purchases:', error);
     res.status(500).json({ 
-      error: 'Failed to search purchases',
+      success: false,
+      error: 'فشل في البحث عن الطلبات',
       code: 'SERVER_ERROR'
     });
   }
 };
 
 // ============================================
-// Update Purchase Status (✅ Fixed for Supabase)
+// Update Purchase Status
 // ============================================
 
 export const updateStatus = async (req: Request, res: Response) => {
@@ -505,30 +544,22 @@ export const updateStatus = async (req: Request, res: Response) => {
 
     const validStatuses = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
     if (!validStatuses.includes(status)) {
-      throw new ValidationError('Invalid status', [`Status must be one of: ${validStatuses.join(', ')}`]);
+      throw new ValidationError('حالة غير صالحة', [`الحالة يجب أن تكون واحدة من: ${validStatuses.join(', ')}`]);
     }
 
-    // ✅ استخدام Supabase عبر PurchaseRepository
     const existing = await PurchaseRepository.findById(purchaseId);
     if (!existing) {
-      throw new NotFoundError('Purchase not found');
+      throw new NotFoundError('الطلب غير موجود');
     }
 
-    // ✅ التحقق من الصلاحيات
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'manager') {
-      throw new AuthorizationError('Only admins and managers can change status');
+      throw new AuthorizationError('فقط المديرين يمكنهم تغيير الحالة');
     }
 
     if (user.role === 'manager' && existing.requester !== user.username) {
-      throw new AuthorizationError('You can only change status of your own purchases');
+      throw new AuthorizationError('يمكنك فقط تغيير حالة طلباتك الخاصة');
     }
 
-    // ✅ إزالة الشرط للسماح بتغيير جميع الحالات (منجز ← قيد التنفيذ وغيرها)
-    // if (existing.status === 'منجز' || existing.status === 'ملغي') {
-    //   throw new ValidationError('Cannot change status of completed or cancelled purchases');
-    // }
-
-    // ✅ تحديث الحالة باستخدام PurchaseRepository
     const updated = await PurchaseRepository.updateStatus(purchaseId, status);
 
     await logActivity(
@@ -548,8 +579,8 @@ export const updateStatus = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      purchase: updated,
-      message: `Status changed from ${existing.status} to ${status}`
+      message: `تم تغيير الحالة من ${existing.status} إلى ${status}`,
+      data: updated
     });
   } catch (error) {
     logger.error('Error updating status:', error);
@@ -558,6 +589,7 @@ export const updateStatus = async (req: Request, res: Response) => {
         error instanceof NotFoundError || 
         error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code,
         details: error instanceof ValidationError ? error.errors : undefined
@@ -565,7 +597,8 @@ export const updateStatus = async (req: Request, res: Response) => {
     }
 
     res.status(500).json({ 
-      error: 'Failed to update status',
+      success: false,
+      error: 'فشل في تحديث الحالة',
       code: 'SERVER_ERROR'
     });
   }
@@ -581,7 +614,7 @@ export const exportPurchases = async (req: Request, res: Response) => {
     const { status, from, to } = req.query;
 
     if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'manager') {
-      throw new AuthorizationError('Only admins and managers can export purchases');
+      throw new AuthorizationError('فقط المديرين يمكنهم تصدير الطلبات');
     }
 
     const supabase = getSupabase();
@@ -630,13 +663,15 @@ export const exportPurchases = async (req: Request, res: Response) => {
 
     if (error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code
       });
     }
 
     res.status(500).json({ 
-      error: 'Failed to export purchases',
+      success: false,
+      error: 'فشل في تصدير الطلبات',
       code: 'SERVER_ERROR'
     });
   }
@@ -656,11 +691,15 @@ export const getOverduePurchases = async (req: Request, res: Response) => {
       60
     );
 
-    res.json(overdue);
+    res.json({
+      success: true,
+      data: overdue
+    });
   } catch (error) {
     logger.error('Error fetching overdue purchases:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch overdue purchases',
+      success: false,
+      error: 'فشل في جلب الطلبات المتأخرة',
       code: 'SERVER_ERROR'
     });
   }
@@ -680,11 +719,15 @@ export const getExpiringToday = async (req: Request, res: Response) => {
       60
     );
 
-    res.json(expiring);
+    res.json({
+      success: true,
+      data: expiring
+    });
   } catch (error) {
     logger.error('Error fetching expiring purchases:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch expiring purchases',
+      success: false,
+      error: 'فشل في جلب الطلبات المنتهية اليوم',
       code: 'SERVER_ERROR'
     });
   }
@@ -719,18 +762,21 @@ export const getAlertStats = async (req: Request, res: Response) => {
           .lte('delivery_date', future4.toISOString().split('T')[0]);
 
         return {
-          overdue: overdue.length,
-          expiringToday: expiringToday.length,
-          expiringSoon: expiringSoon?.length || 0,
-          mostOverdue: overdue.slice(0, 5).map(p => ({
-            id: p.id,
-            request_number: p.request_number,
-            requester: p.requester,
-            description: p.description,
-            delivery_date: p.delivery_date,
-            status: p.status,
-            days_overdue: Math.floor((new Date().getTime() - new Date(p.delivery_date).getTime()) / (1000 * 60 * 60 * 24))
-          }))
+          success: true,
+          data: {
+            overdue: overdue.length,
+            expiringToday: expiringToday.length,
+            expiringSoon: expiringSoon?.length || 0,
+            mostOverdue: overdue.slice(0, 5).map(p => ({
+              id: p.id,
+              request_number: p.request_number,
+              requester: p.requester,
+              description: p.description,
+              delivery_date: p.delivery_date,
+              status: p.status,
+              days_overdue: Math.floor((new Date().getTime() - new Date(p.delivery_date).getTime()) / (1000 * 60 * 60 * 24))
+            }))
+          }
         };
       },
       60
@@ -740,7 +786,8 @@ export const getAlertStats = async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error fetching alert stats:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch alert statistics',
+      success: false,
+      error: 'فشل في جلب إحصائيات التنبيهات',
       code: 'SERVER_ERROR'
     });
   }
@@ -765,11 +812,15 @@ export const getAuditLogs = async (req: Request, res: Response) => {
       limit: parseInt(limit as string, 10)
     });
     
-    res.json(result);
+    res.json({
+      success: true,
+      data: result
+    });
   } catch (error) {
     logger.error('Error fetching audit logs:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch audit logs',
+      success: false,
+      error: 'فشل في جلب سجل التدقيق',
       code: 'SERVER_ERROR'
     });
   }
@@ -784,11 +835,15 @@ export const getAuditLogsByPurchase = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { getAuditLogsByEntity } = await import('../services/audit.service.js');
     const logs = await getAuditLogsByEntity('purchase', parseInt(id, 10));
-    res.json(logs);
+    res.json({
+      success: true,
+      data: logs
+    });
   } catch (error) {
     logger.error('Error fetching audit logs by purchase:', error);
     res.status(500).json({ 
-      error: 'Failed to fetch audit logs',
+      success: false,
+      error: 'فشل في جلب سجل التدقيق للطلب',
       code: 'SERVER_ERROR'
     });
   }
@@ -805,7 +860,7 @@ export const restorePurchase = async (req: Request, res: Response) => {
     const purchaseId = parseInt(id);
 
     if (user.role !== 'admin' && user.role !== 'super_admin') {
-      throw new AuthorizationError('Only admins can restore purchases');
+      throw new AuthorizationError('فقط المديرين يمكنهم استعادة الطلبات');
     }
 
     const restored = await PurchaseRepository.restore(purchaseId);
@@ -826,21 +881,23 @@ export const restorePurchase = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      purchase: restored,
-      message: 'Purchase restored successfully'
+      message: 'تم استعادة الطلب بنجاح',
+      data: restored
     });
   } catch (error) {
     logger.error('Error restoring purchase:', error);
 
     if (error instanceof NotFoundError || error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code
       });
     }
 
     res.status(500).json({ 
-      error: 'Failed to restore purchase',
+      success: false,
+      error: 'فشل في استعادة الطلب',
       code: 'SERVER_ERROR'
     });
   }
@@ -855,7 +912,7 @@ export const getDeletedPurchases = async (req: Request, res: Response) => {
     const user = (req as any).user;
 
     if (user.role !== 'admin' && user.role !== 'super_admin') {
-      throw new AuthorizationError('Only admins can view deleted purchases');
+      throw new AuthorizationError('فقط المديرين يمكنهم عرض الطلبات المحذوفة');
     }
 
     const supabase = getSupabase();
@@ -867,19 +924,24 @@ export const getDeletedPurchases = async (req: Request, res: Response) => {
 
     if (error) throw error;
 
-    res.json(purchases || []);
+    res.json({
+      success: true,
+      data: purchases || []
+    });
   } catch (error) {
     logger.error('Error fetching deleted purchases:', error);
 
     if (error instanceof AuthorizationError) {
       return res.status(error.statusCode).json({
+        success: false,
         error: error.message,
         code: error.code
       });
     }
 
     res.status(500).json({ 
-      error: 'Failed to fetch deleted purchases',
+      success: false,
+      error: 'فشل في جلب الطلبات المحذوفة',
       code: 'SERVER_ERROR'
     });
   }

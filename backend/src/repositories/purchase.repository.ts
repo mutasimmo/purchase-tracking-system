@@ -23,17 +23,20 @@ export interface Purchase {
   department?: string;
 }
 
+// ✅ واجهة PurchaseCreate المعدلة بالكامل
 export interface PurchaseCreate {
   request_number: string;
   date: string;
   requester: string;
   invoice_owner?: string;
   description: string;
-  receiver: string;
-  delivery_date: string;
+  receiver?: string;           // ✅ اختياري
+  delivery_date?: string;      // ✅ اختياري
   status?: string;
   notes?: string;
-  created_by?: number;
+  priority?: string;           // ✅ جديد
+  department?: string;         // ✅ جديد
+  created_by?: number | null;  // ✅ يسمح بـ null
 }
 
 export interface PurchaseFilters {
@@ -62,7 +65,7 @@ const formatDate = (date: string | Date): string => {
 };
 
 // ============================================
-// 📌 Purchase Repository
+// 📌 Purchase Repository - النسخة النهائية المعدلة
 // ============================================
 
 export const PurchaseRepository = {
@@ -104,7 +107,7 @@ export const PurchaseRepository = {
     }
   },
 
-  // ✅ Create new purchase (مع سجلات وتحويل التواريخ)
+  // ✅ Create new purchase (النسخة المعدلة بالكامل)
   create: async (data: PurchaseCreate): Promise<Purchase> => {
     try {
       const supabase = getSupabase();
@@ -118,9 +121,11 @@ export const PurchaseRepository = {
         throw new ConflictError('Request number already exists');
       }
 
-      // ✅ تحويل التواريخ إلى التنسيق الصحيح
+      // ✅ تحويل التواريخ إلى التنسيق الصحيح مع قيم افتراضية
       const formattedDate = formatDate(data.date);
-      const formattedDeliveryDate = formatDate(data.delivery_date);
+      const formattedDeliveryDate = data.delivery_date 
+        ? formatDate(data.delivery_date) 
+        : new Date().toISOString().split('T')[0]; // ✅ قيمة افتراضية
 
       console.log('📅 [Repository] Formatted dates:', {
         originalDate: data.date,
@@ -129,17 +134,19 @@ export const PurchaseRepository = {
         formattedDeliveryDate
       });
 
-      // ✅ بناء كائن الإدراج
+      // ✅ بناء كائن الإدراج مع جميع الحقول والقيم الافتراضية
       const insertData = {
         request_number: data.request_number,
         date: formattedDate,
         requester: data.requester,
         invoice_owner: data.invoice_owner || '',
         description: data.description,
-        receiver: data.receiver,
+        receiver: data.receiver || 'غير محدد',        // ✅ قيمة افتراضية
         delivery_date: formattedDeliveryDate,
         status: data.status || 'قيد التنفيذ',
         notes: data.notes || '',
+        priority: data.priority || 'medium',          // ✅ قيمة افتراضية
+        department: data.department || '',            // ✅ قيمة افتراضية
         created_by: data.created_by || null
       };
 
