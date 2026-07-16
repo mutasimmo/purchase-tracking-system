@@ -23,7 +23,7 @@ const PurchaseForm: React.FC<Props> = ({
     request_number: '',
     date: new Date().toISOString().split('T')[0],
     requester: '',
-    invoice_owner: '',  // ✅ إضافة صاحب الفاتورة
+    invoice_owner: '',
     description: '',
     receiver: '',
     delivery_date: '',
@@ -45,7 +45,6 @@ const PurchaseForm: React.FC<Props> = ({
         ...prev,
         request_number: nextRequestNumber
       }));
-      // ✅ مسح أي خطأ في رقم الطلب
       if (errors.request_number) {
         setErrors(prev => ({ ...prev, request_number: '' }));
       }
@@ -62,7 +61,7 @@ const PurchaseForm: React.FC<Props> = ({
         request_number: purchase.request_number || '',
         date: purchase.date || new Date().toISOString().split('T')[0],
         requester: purchase.requester || '',
-        invoice_owner: purchase.invoice_owner || '',  // ✅ إضافة صاحب الفاتورة
+        invoice_owner: purchase.invoice_owner || '',
         description: purchase.description || '',
         receiver: purchase.receiver || '',
         delivery_date: purchase.delivery_date || '',
@@ -95,11 +94,6 @@ const PurchaseForm: React.FC<Props> = ({
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
-    
-    // ✅ التحقق من صاحب الفاتورة (اختياري - أزل التعليق إذا أردت جعله إلزامياً)
-    // if (!data.invoice_owner.trim()) {
-    //   errors.invoice_owner = 'صاحب الفاتورة مطلوب';
-    // }
     
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
@@ -147,7 +141,7 @@ const PurchaseForm: React.FC<Props> = ({
   };
 
   // ============================================
-  // ✅ معالج الإرسال
+  // ✅ معالج الإرسال (المعدل)
   // ============================================
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -155,6 +149,7 @@ const PurchaseForm: React.FC<Props> = ({
     
     console.log('📤 Form submitted');
     
+    // ✅ التحقق من صحة البيانات
     const allErrors = validateForm(formData);
     setErrors(allErrors);
     
@@ -174,9 +169,12 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
+    // ✅ التأكد من وجود receiver و delivery_date مع قيم افتراضية
     const submitData = {
       ...formData,
-      invoice_owner: formData.invoice_owner || '',  // ✅ تأكد من إرسال القيمة
+      receiver: formData.receiver.trim() || formData.requester,
+      delivery_date: formData.delivery_date || formData.date,
+      invoice_owner: formData.invoice_owner || '',
       notes: formData.notes || ''
     };
     
@@ -293,7 +291,7 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
-        {/* ✅ صاحب الفاتورة */}
+        {/* صاحب الفاتورة */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             🧾 صاحب الفاتورة
