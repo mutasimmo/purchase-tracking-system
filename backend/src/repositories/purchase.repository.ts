@@ -48,6 +48,20 @@ export interface PurchaseFilters {
 }
 
 // ============================================
+// ✅ دالة مساعدة لتحويل التاريخ إلى تنسيق YYYY-MM-DD
+// ============================================
+
+const formatDate = (date: string | Date): string => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) {
+    console.error('❌ Invalid date:', date);
+    return '';
+  }
+  return d.toISOString().split('T')[0];
+};
+
+// ============================================
 // 📌 Purchase Repository
 // ============================================
 
@@ -90,38 +104,69 @@ export const PurchaseRepository = {
     }
   },
 
-  // ✅ Create new purchase
+  // ✅ Create new purchase (مع سجلات وتحويل التواريخ)
   create: async (data: PurchaseCreate): Promise<Purchase> => {
     try {
       const supabase = getSupabase();
 
-      // Check unique request number
+      // ✅ سجل البيانات المستلمة
+      console.log('📥 [Repository] Creating purchase with data:', JSON.stringify(data, null, 2));
+
+      // ✅ التحقق من وجود رقم الطلب
       const existing = await PurchaseRepository.findByRequestNumber(data.request_number);
       if (existing) {
+        console.log('❌ [Repository] Request number already exists:', data.request_number);
         throw new ConflictError('Request number already exists');
       }
 
+      // ✅ تحويل التواريخ إلى التنسيق الصحيح
+      const formattedDate = formatDate(data.date);
+      const formattedDeliveryDate = formatDate(data.delivery_date);
+
+      console.log('📅 [Repository] Formatted dates:', {
+        originalDate: data.date,
+        formattedDate,
+        originalDeliveryDate: data.delivery_date,
+        formattedDeliveryDate
+      });
+
+      // ✅ بناء كائن الإدراج
+      const insertData = {
+        request_number: data.request_number,
+        date: formattedDate,
+        requester: data.requester,
+        invoice_owner: data.invoice_owner || '',
+        description: data.description,
+        receiver: data.receiver,
+        delivery_date: formattedDeliveryDate,
+        status: data.status || 'قيد التنفيذ',
+        notes: data.notes || '',
+        created_by: data.created_by || null
+      };
+
+      console.log('📤 [Repository] Inserting data:', JSON.stringify(insertData, null, 2));
+
+      // ✅ تنفيذ الإدراج
       const { data: result, error } = await supabase
         .from('purchases')
-        .insert({
-          request_number: data.request_number,
-          date: data.date,
-          requester: data.requester,
-          invoice_owner: data.invoice_owner || '',
-          description: data.description,
-          receiver: data.receiver,
-          delivery_date: data.delivery_date,
-          status: data.status || 'قيد التنفيذ',
-          notes: data.notes || '',
-          created_by: data.created_by || null
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [Repository] Supabase insert error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw error;
+      }
+
+      console.log('✅ [Repository] Purchase created successfully:', result);
       return result;
     } catch (error) {
-      logger.error('PurchaseRepository.create error:', error);
+      console.error('❌ [Repository] PurchaseRepository.create error:', error);
       throw error;
     }
   },
