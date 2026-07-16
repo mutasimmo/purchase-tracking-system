@@ -2,13 +2,12 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { getSupabase } from './database.js';
-import logger from './logger.js';
 
 // ============================================
-// ✅ Check for JWT Secret
+// ✅ Configuration
 // ============================================
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET!;
 if (!JWT_SECRET) {
   throw new Error('❌ JWT_SECRET is not defined in environment variables!');
 }
@@ -22,68 +21,68 @@ const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12', 10);
 // ============================================
 
 export const hashPassword = async (password: string): Promise<string> => {
-  if (password.length < 8) {
+  if (!password || password.length < 8) {
     throw new Error('Password must be at least 8 characters long');
   }
   return await bcrypt.hash(password, SALT_ROUNDS);
 };
 
 export const comparePassword = async (password: string, hashedPassword: string): Promise<boolean> => {
+  if (!password || !hashedPassword) return false;
   return await bcrypt.compare(password, hashedPassword);
 };
 
 export const validatePassword = (password: string): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
-  if (password.length < 8) errors.push('Password must be at least 8 characters');
-  if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter');
-  if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter');
-  if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number');
-  if (!/[!@#$%^&*]/.test(password)) errors.push('Password must contain at least one special character');
+  if (!password || password.length < 8) {
+    errors.push('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('كلمة المرور يجب أن تحتوي على حرف كبير');
+  }
+  if (!/[a-z]/.test(password)) {
+    errors.push('كلمة المرور يجب أن تحتوي على حرف صغير');
+  }
+  if (!/[0-9]/.test(password)) {
+    errors.push('كلمة المرور يجب أن تحتوي على رقم');
+  }
+  if (!/[!@#$%^&*]/.test(password)) {
+    errors.push('كلمة المرور يجب أن تحتوي على رمز خاص');
+  }
   return { valid: errors.length === 0, errors };
 };
 
 // ============================================
-// 🎫 Token functions
+// 🎫 Token functions - ✅ الحل النهائي
 // ============================================
 
 export const generateToken = (userId: number, username: string, role: string = 'user'): string => {
-  const payload: jwt.JwtPayload = {
+  const payload = {
     id: userId,
     username,
     role,
-    iat: Math.floor(Date.now() / 1000)
+    type: 'access'
   };
   
-  const token = jwt.sign(
-    payload,
-    JWT_SECRET,
-    {
-      expiresIn: JWT_EXPIRES_IN,
-      issuer: process.env.JWT_ISSUER || 'purchase-system',
-      audience: process.env.JWT_AUDIENCE || 'purchase-app'
-    } as jwt.SignOptions
-  );
-  
-  return token;
+  // ✅ استخدام JWT_SECRET مع non-null assertion
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+    issuer: process.env.JWT_ISSUER || 'purchase-system',
+    audience: process.env.JWT_AUDIENCE || 'purchase-app'
+  } as jwt.SignOptions);
 };
 
 export const generateRefreshToken = (userId: number): string => {
-  const payload: jwt.JwtPayload = {
+  const payload = {
     id: userId,
-    type: 'refresh',
-    iat: Math.floor(Date.now() / 1000)
+    type: 'refresh'
   };
   
-  const token = jwt.sign(
-    payload,
-    JWT_SECRET,
-    {
-      expiresIn: REFRESH_TOKEN_EXPIRES_IN,
-      issuer: process.env.JWT_ISSUER || 'purchase-system'
-    } as jwt.SignOptions
-  );
-  
-  return token;
+  // ✅ استخدام JWT_SECRET مع non-null assertion
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+    issuer: process.env.JWT_ISSUER || 'purchase-system'
+  } as jwt.SignOptions);
 };
 
 export const verifyToken = (token: string): { valid: boolean; data?: any; error?: string } => {
@@ -92,48 +91,63 @@ export const verifyToken = (token: string): { valid: boolean; data?: any; error?
     return { valid: true, data: decoded };
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return { valid: false, error: 'Token expired' };
+      return { valid: false, error: 'انتهت صلاحية التوكن' };
     }
     if (error instanceof jwt.JsonWebTokenError) {
-      return { valid: false, error: 'Invalid token' };
+      return { valid: false, error: 'توكن غير صالح' };
     }
-    return { valid: false, error: 'Unknown error' };
+    return { valid: false, error: 'خطأ غير معروف' };
   }
 };
 
 export const verifyRefreshToken = (token: string): { valid: boolean; data?: any; error?: string } => {
   const result = verifyToken(token);
   if (result.valid && result.data.type !== 'refresh') {
-    return { valid: false, error: 'Invalid token type' };
+    return { valid: false, error: 'نوع توكن غير صحيح' };
   }
   return result;
 };
 
 // ============================================
-// 📥 Get token functions
+// 📥 Get token from request
 // ============================================
 
 export const getTokenFromCookie = (req: any): string | null => {
-  const token = req.cookies?.token || req.cookies?.accessToken;
-  if (token && typeof token === 'string' && token.length > 0) {
-    return token;
+  if (req.cookies?.token) {
+    return req.cookies.token;
   }
   return null;
 };
 
 export const getRefreshTokenFromCookie = (req: any): string | null => {
-  const token = req.cookies?.refreshToken;
-  if (token && typeof token === 'string' && token.length > 0) {
-    return token;
+  if (req.cookies?.refreshToken) {
+    return req.cookies.refreshToken;
   }
   return null;
 };
 
+export const getTokenFromRequest = (req: any): string | null => {
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+
+  if (req.cookies?.token) {
+    return req.cookies.token;
+  }
+
+  if (req.query?.token) {
+    return req.query.token;
+  }
+
+  return null;
+};
+
 // ============================================
-// 👤 User functions (using Supabase)
+// 👤 User functions
 // ============================================
 
-export const getUserWithRole = async (userId: number) => {
+export const getUserById = async (userId: number) => {
   try {
     const supabase = getSupabase();
     const { data: user, error } = await supabase
@@ -146,8 +160,7 @@ export const getUserWithRole = async (userId: number) => {
     if (error) throw error;
     return user;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error getting user with role:', errorMessage);
+    console.error('Error getting user by id:', error);
     return null;
   }
 };
@@ -165,8 +178,7 @@ export const getUserByUsername = async (username: string) => {
     if (error) throw error;
     return user;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error getting user by username:', errorMessage);
+    console.error('Error getting user by username:', error);
     return null;
   }
 };
@@ -184,14 +196,13 @@ export const getUserByEmail = async (email: string) => {
     if (error) throw error;
     return user;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error getting user by email:', errorMessage);
+    console.error('Error getting user by email:', error);
     return null;
   }
 };
 
 // ============================================
-// 🚫 Token blacklist functions (using Supabase)
+// 🚫 Token blacklist functions
 // ============================================
 
 export const blacklistToken = async (token: string, userId: number) => {
@@ -209,10 +220,9 @@ export const blacklistToken = async (token: string, userId: number) => {
       });
     
     if (error) throw error;
-    logger.info(`Token blacklisted for user ${userId}`);
+    console.log(`✅ Token blacklisted for user ${userId}`);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error blacklisting token:', errorMessage);
+    console.error('Error blacklisting token:', error);
     throw error;
   }
 };
@@ -221,7 +231,6 @@ export const revokeAllUserTokens = async (userId: number) => {
   try {
     const supabase = getSupabase();
     
-    // Get all active sessions
     const { data: sessions, error: sessionsError } = await supabase
       .from('sessions')
       .select('token')
@@ -236,7 +245,6 @@ export const revokeAllUserTokens = async (userId: number) => {
       }
     }
     
-    // Deactivate all sessions
     const { error: updateError } = await supabase
       .from('sessions')
       .update({ is_active: 0 })
@@ -244,10 +252,9 @@ export const revokeAllUserTokens = async (userId: number) => {
     
     if (updateError) throw updateError;
     
-    logger.info(`All tokens revoked for user ${userId}`);
+    console.log(`✅ All tokens revoked for user ${userId}`);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error revoking all user tokens:', errorMessage);
+    console.error('Error revoking all user tokens:', error);
     throw error;
   }
 };
@@ -261,18 +268,11 @@ export const cleanupExpiredTokens = async () => {
       .lt('expires_at', new Date().toISOString());
     
     if (error) throw error;
-    logger.info(`Cleaned up expired tokens`);
-    return 0;
+    console.log('🧹 Cleaned up expired tokens');
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error cleaning up expired tokens:', errorMessage);
-    throw error;
+    console.error('Error cleaning up expired tokens:', error);
   }
 };
-
-// ============================================
-// 📊 Failed login attempts
-// ============================================
 
 export const logFailedLogin = async (username: string, ip: string, userAgent: string) => {
   try {
@@ -288,26 +288,13 @@ export const logFailedLogin = async (username: string, ip: string, userAgent: st
         ip_address: ip,
         user_agent: userAgent
       });
-    
-    // Check for too many attempts
-    const { count, error } = await supabase
-      .from('audit_log')
-      .select('*', { count: 'exact', head: true })
-      .eq('username', username)
-      .eq('action', 'FAILED_LOGIN')
-      .gte('created_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
-    
-    if (!error && count !== null && count >= 5) {
-      logger.warn(`Too many failed login attempts for user: ${username}`);
-    }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Error logging failed login:', errorMessage);
+    console.error('Error logging failed login:', error);
   }
 };
 
 // ============================================
-// 📝 Export all functions
+// 📝 Export
 // ============================================
 
 export default {
@@ -320,7 +307,8 @@ export default {
   verifyRefreshToken,
   getTokenFromCookie,
   getRefreshTokenFromCookie,
-  getUserWithRole,
+  getTokenFromRequest,
+  getUserById,
   getUserByUsername,
   getUserByEmail,
   blacklistToken,
