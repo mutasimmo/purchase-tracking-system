@@ -109,7 +109,6 @@ export const PurchaseRepository = {
     try {
       const supabase = getSupabase();
 
-      // ✅ سجل البيانات المستلمة
       console.log('📥 [Repository] Creating purchase with data:', JSON.stringify(data, null, 2));
 
       // ✅ التحقق من وجود رقم الطلب
@@ -201,7 +200,12 @@ export const PurchaseRepository = {
 
       for (const field of fields) {
         if (updates[field as keyof Purchase] !== undefined) {
-          updateData[field] = updates[field as keyof Purchase];
+          // ✅ تحويل التواريخ عند التحديث
+          if (field === 'date' || field === 'delivery_date') {
+            updateData[field] = formatDate(updates[field as keyof Purchase] as string);
+          } else {
+            updateData[field] = updates[field as keyof Purchase];
+          }
         }
       }
 
