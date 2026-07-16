@@ -151,7 +151,7 @@ export const getPurchaseById = async (req: Request, res: Response) => {
 };
 
 // ============================================
-// Create New Purchase
+// Create New Purchase (✅ مع سجلات مفصلة)
 // ============================================
 
 export const createPurchase = async (req: Request, res: Response) => {
@@ -169,21 +169,46 @@ export const createPurchase = async (req: Request, res: Response) => {
       notes 
     } = req.body;
 
+    // ✅ سجل البيانات المستلمة
+    console.log('📥 [createPurchase] Received data:', {
+      request_number,
+      date,
+      requester,
+      invoice_owner,
+      description,
+      receiver,
+      delivery_date,
+      status,
+      notes,
+      user_id: user?.id,
+      user_role: user?.role
+    });
+
+    // ✅ التحقق من صحة البيانات
     const validation = validatePurchase(req.body);
     if (!validation.valid) {
+      console.log('❌ [createPurchase] Validation failed:', validation.errors);
       throw new ValidationError('Validation failed', validation.errors);
     }
+    console.log('✅ [createPurchase] Validation passed');
 
-    // Check if request number exists
+    // ✅ التحقق من وجود رقم الطلب
     const existing = await PurchaseRepository.findByRequestNumber(request_number);
     if (existing) {
+      console.log('❌ [createPurchase] Request number already exists:', request_number);
       throw new ConflictError('Request number already exists');
     }
+    console.log('✅ [createPurchase] Request number is unique');
 
+    // ✅ التحقق من تاريخ التسليم
     if (delivery_date < date) {
+      console.log('❌ [createPurchase] Invalid delivery date:', { delivery_date, date });
       throw new ValidationError('Delivery date must be after request date');
     }
+    console.log('✅ [createPurchase] Delivery date is valid');
 
+    // ✅ إنشاء الطلب
+    console.log('📤 [createPurchase] Calling PurchaseRepository.create...');
     const purchase = await PurchaseRepository.create({
       request_number,
       date,
@@ -196,7 +221,9 @@ export const createPurchase = async (req: Request, res: Response) => {
       notes: notes || '',
       created_by: user?.id || null
     });
+    console.log('✅ [createPurchase] Purchase created successfully, ID:', purchase.id);
 
+    // ✅ تسجيل النشاط
     await logActivity(
       user?.id,
       user?.username || 'system',
@@ -207,12 +234,21 @@ export const createPurchase = async (req: Request, res: Response) => {
       req.ip,
       req.headers['user-agent']
     );
+    console.log('✅ [createPurchase] Activity logged');
 
+    // ✅ مسح الكاش
     Cache.delPrefix('dashboard:stats');
     Cache.delPrefix('alerts:');
+    console.log('✅ [createPurchase] Cache cleared');
 
     res.status(201).json(purchase);
   } catch (error) {
+    // ✅ سجل الخطأ بالتفصيل
+    console.error('❌ [createPurchase] Error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      body: req.body
+    });
     logger.error('Error creating purchase:', error);
     
     if (error instanceof ValidationError || error instanceof ConflictError) {
@@ -225,7 +261,8 @@ export const createPurchase = async (req: Request, res: Response) => {
     
     res.status(500).json({ 
       error: 'Failed to create purchase',
-      code: 'SERVER_ERROR'
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.message : undefined : undefined
     });
   }
 };
