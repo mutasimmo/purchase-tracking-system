@@ -47,15 +47,23 @@ export interface PurchaseFilters {
 }
 
 // ============================================
+// ✅ معلومات الترقيم (Pagination)
+// ============================================
+
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+// ============================================
 // ✅ الاستجابات
 // ============================================
 
 export interface PurchaseResponse {
   data: Purchase[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
+  pagination: PaginationInfo;
 }
 
 // ============================================
