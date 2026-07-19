@@ -19,16 +19,19 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
     mostOverdue: [] as any[]
   });
   const [refreshing, setRefreshing] = useState(false);
+  
+  // ✅ حالة النافذة المنبثقة للتفاصيل
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
 
   // ============================================
-  // ✅ جلب التنبيهات - النسخة النهائية
+  // ✅ جلب التنبيهات
   // ============================================
 
   const loadAlerts = useCallback(async () => {
     try {
       setLoading(true);
       
-      // ✅ جلب البيانات
       const [overdueData, expiringData, statsData] = await Promise.all([
         purchaseApi.getOverdue(),
         purchaseApi.getExpiringToday(),
@@ -39,11 +42,9 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
       console.log('📊 Expiring Data:', expiringData);
       console.log('📊 Stats Data:', statsData);
       
-      // ✅ تحديث القوائم
       setOverdue(overdueData || []);
       setExpiringToday(expiringData || []);
       
-      // ✅ استخراج الإحصائيات من data.data (التنسيق الصحيح)
       const statsInfo = statsData?.data || statsData || {};
       setStats({
         overdue: statsInfo.overdue || 0,
@@ -52,18 +53,31 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
         mostOverdue: statsInfo.mostOverdue || []
       });
       
-      console.log('📊 Updated Stats:', {
-        overdue: statsInfo.overdue || 0,
-        expiringToday: statsInfo.expiringToday || 0
-      });
-      
     } catch (error) {
       toast.error('❌ حدث خطأ في تحميل التنبيهات');
-      console.error('❌ Load Alerts Error:', error);
+      console.error(error);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // ============================================
+  // ✅ فتح تفاصيل الطلب
+  // ============================================
+
+  const handleViewDetails = (purchase: Purchase) => {
+    setSelectedPurchase(purchase);
+    setShowDetails(true);
+  };
+
+  // ============================================
+  // ✅ إغلاق التفاصيل
+  // ============================================
+
+  const handleCloseDetails = () => {
+    setShowDetails(false);
+    setSelectedPurchase(null);
+  };
 
   // ============================================
   // ✅ التحميل الأولي
@@ -110,6 +124,15 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
     });
   };
 
+  const formatFullDate = (date: string) => {
+    return new Date(date).toLocaleDateString('ar-SA', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long'
+    });
+  };
+
   const getDaysOverdue = (deliveryDate: string) => {
     const diff = Math.ceil(
       (new Date().getTime() - new Date(deliveryDate).getTime()) / 
@@ -140,158 +163,292 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   // ============================================
 
   return (
-    <div className="bg-white rounded-3xl shadow-2xl p-4 sm:p-6 border border-gray-100 max-h-[90vh] overflow-y-auto">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
-            <i className="fas fa-bell text-red-500 text-2xl"></i>
+    <>
+      {/* ✅ القائمة الرئيسية */}
+      <div className="bg-white rounded-3xl shadow-2xl p-4 sm:p-6 border border-gray-100 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center">
+              <i className="fas fa-bell text-red-500 text-2xl"></i>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-800">التنبيهات</h2>
+              <p className="text-sm text-gray-500">
+                {!hasAlerts ? '✅ لا توجد تنبيهات' : `⚠️ لديك ${totalAlerts} تنبيه`}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">التنبيهات</h2>
-            <p className="text-sm text-gray-500">
-              {!hasAlerts ? '✅ لا توجد تنبيهات' : `⚠️ لديك ${totalAlerts} تنبيه`}
-            </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+              title="تحديث"
+            >
+              <i className={`fas fa-sync-alt ${refreshing ? 'animate-spin' : ''}`}></i>
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-xl"
+            >
+              <i className="fas fa-times text-xl"></i>
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-            title="تحديث"
-          >
-            <i className={`fas fa-sync-alt ${refreshing ? 'animate-spin' : ''}`}></i>
-          </button>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-xl"
-          >
-            <i className="fas fa-times text-xl"></i>
-          </button>
-        </div>
-      </div>
 
-      {/* إحصائيات سريعة */}
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
-          <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
-          <div className="text-xs text-gray-600">متأخر</div>
+        {/* إحصائيات سريعة */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+            <div className="text-xs text-gray-600">متأخر</div>
+          </div>
+          <div className="bg-orange-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
+            <div className="text-2xl font-bold text-orange-600">{stats.expiringToday}</div>
+            <div className="text-xs text-gray-600">ينتهي اليوم</div>
+          </div>
+          <div className="bg-yellow-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
+            <div className="text-2xl font-bold text-yellow-600">{stats.expiringSoon}</div>
+            <div className="text-xs text-gray-600">قريباً</div>
+          </div>
         </div>
-        <div className="bg-orange-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
-          <div className="text-2xl font-bold text-orange-600">{stats.expiringToday}</div>
-          <div className="text-xs text-gray-600">ينتهي اليوم</div>
-        </div>
-        <div className="bg-yellow-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
-          <div className="text-2xl font-bold text-yellow-600">{stats.expiringSoon}</div>
-          <div className="text-xs text-gray-600">قريباً</div>
-        </div>
-      </div>
 
-      {/* الطلبات المتأخرة */}
-      {overdue.length > 0 && (
-        <div className="mb-6">
-          <h3 className="font-bold text-red-600 mb-3 flex items-center gap-2">
-            <i className="fas fa-exclamation-circle"></i>
-            طلبات متأخرة ({overdue.length})
-          </h3>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {overdue.map((purchase) => {
-              const days = getDaysOverdue(purchase.delivery_date);
-              const isCritical = days >= 7;
-              return (
+        {/* الطلبات المتأخرة */}
+        {overdue.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-bold text-red-600 mb-3 flex items-center gap-2">
+              <i className="fas fa-exclamation-circle"></i>
+              طلبات متأخرة ({overdue.length})
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {overdue.map((purchase) => {
+                const days = getDaysOverdue(purchase.delivery_date);
+                const isCritical = days >= 7;
+                return (
+                  <div 
+                    key={purchase.id} 
+                    onClick={() => handleViewDetails(purchase)}
+                    className={`${isCritical ? 'bg-red-100 border-red-600' : 'bg-red-50 border-red-500'} border-r-4 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow cursor-pointer hover:scale-[1.02]`}
+                  >
+                    <div>
+                      <div className="font-medium text-gray-800 flex items-center gap-2">
+                        {isCritical && (
+                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
+                            حرج
+                          </span>
+                        )}
+                        {purchase.request_number}
+                      </div>
+                      <div className="text-sm text-gray-600">{purchase.requester}</div>
+                      <div className="text-xs text-gray-400">{purchase.description?.substring(0, 50)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className={`text-sm font-bold ${isCritical ? 'text-red-700' : 'text-red-600'}`}>
+                        متأخر {days} يوم
+                      </div>
+                      <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
+                      <div className="text-xs text-blue-500 mt-1">
+                        <i className="fas fa-chevron-left"></i> اضغط للتفاصيل
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* طلبات تنتهي اليوم */}
+        {expiringToday.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-bold text-orange-600 mb-3 flex items-center gap-2">
+              <i className="fas fa-clock"></i>
+              تنتهي اليوم ({expiringToday.length})
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {expiringToday.map((purchase) => (
                 <div 
                   key={purchase.id} 
-                  className={`${isCritical ? 'bg-red-100 border-red-600' : 'bg-red-50 border-red-500'} border-r-4 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow`}
+                  onClick={() => handleViewDetails(purchase)}
+                  className="bg-orange-50 border-r-4 border-orange-500 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow cursor-pointer hover:scale-[1.02]"
                 >
                   <div>
-                    <div className="font-medium text-gray-800 flex items-center gap-2">
-                      {isCritical && (
-                        <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
-                          حرج
-                        </span>
-                      )}
-                      {purchase.request_number}
-                    </div>
+                    <div className="font-medium text-gray-800">{purchase.request_number}</div>
                     <div className="text-sm text-gray-600">{purchase.requester}</div>
-                    <div className="text-xs text-gray-400">{purchase.description?.substring(0, 50)}</div>
                   </div>
                   <div className="text-right">
-                    <div className={`text-sm font-bold ${isCritical ? 'text-red-700' : 'text-red-600'}`}>
-                      متأخر {days} يوم
-                    </div>
+                    <div className="text-sm font-bold text-orange-600">ينتهي اليوم</div>
                     <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
+                    <div className="text-xs text-blue-500 mt-1">
+                      <i className="fas fa-chevron-left"></i> اضغط للتفاصيل
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* طلبات تنتهي اليوم */}
-      {expiringToday.length > 0 && (
-        <div className="mb-6">
-          <h3 className="font-bold text-orange-600 mb-3 flex items-center gap-2">
-            <i className="fas fa-clock"></i>
-            تنتهي اليوم ({expiringToday.length})
-          </h3>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {expiringToday.map((purchase) => (
-              <div key={purchase.id} className="bg-orange-50 border-r-4 border-orange-500 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow">
-                <div>
-                  <div className="font-medium text-gray-800">{purchase.request_number}</div>
-                  <div className="text-sm text-gray-600">{purchase.requester}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-orange-600">ينتهي اليوم</div>
-                  <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
-                </div>
-              </div>
-            ))}
+        {/* لا توجد تنبيهات */}
+        {!hasAlerts && (
+          <div className="text-center py-8">
+            <div className="text-6xl text-green-300 mb-4">✅</div>
+            <p className="text-gray-500 font-medium">جميع الطلبات في الموعد المحدد</p>
+            <p className="text-sm text-gray-400">لا توجد طلبات متأخرة أو منتهية</p>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* أكثر الطلبات تأخراً */}
-      {stats.mostOverdue && stats.mostOverdue.length > 0 && (
-        <div className="mb-6">
-          <h3 className="font-bold text-purple-600 mb-3 flex items-center gap-2">
-            <i className="fas fa-fire"></i>
-            أكثر الطلبات تأخراً
-          </h3>
-          <div className="space-y-2">
-            {stats.mostOverdue.slice(0, 5).map((item: any, index: number) => (
-              <div key={index} className="bg-purple-50 border-r-4 border-purple-500 p-3 rounded-xl flex justify-between items-center">
-                <div>
-                  <div className="font-medium text-gray-800">{item.request_number}</div>
-                  <div className="text-sm text-gray-600">{item.requester}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-purple-600">
-                    متأخر {Math.round(item.days_overdue)} يوم
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* وقت آخر تحديث */}
+        <div className="text-center text-xs text-gray-400 mt-4 border-t pt-4">
+          آخر تحديث: {new Date().toLocaleTimeString('ar-SA')}
         </div>
-      )}
-
-      {/* لا توجد تنبيهات */}
-      {!hasAlerts && (
-        <div className="text-center py-8">
-          <div className="text-6xl text-green-300 mb-4">✅</div>
-          <p className="text-gray-500 font-medium">جميع الطلبات في الموعد المحدد</p>
-          <p className="text-sm text-gray-400">لا توجد طلبات متأخرة أو منتهية</p>
-        </div>
-      )}
-
-      {/* وقت آخر تحديث */}
-      <div className="text-center text-xs text-gray-400 mt-4 border-t pt-4">
-        آخر تحديث: {new Date().toLocaleTimeString('ar-SA')}
       </div>
-    </div>
+
+      {/* ============================================
+          ✅ نافذة تفاصيل الطلب (Modal)
+          ============================================ */}
+      {showDetails && selectedPurchase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideUp">
+            {/* Header */}
+            <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b p-4 flex justify-between items-center rounded-t-3xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <i className="fas fa-file-alt text-red-500"></i>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-800">تفاصيل الطلب</h3>
+                  <p className="text-sm text-gray-500">{selectedPurchase.request_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseDetails}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <i className="fas fa-times text-xl"></i>
+              </button>
+            </div>
+
+            {/* المحتوى */}
+            <div className="p-6 space-y-4">
+              {/* رقم الطلب */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">رقم الطلب</p>
+                  <p className="font-bold text-gray-800">{selectedPurchase.request_number}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">الحالة</p>
+                  <p className={`font-bold ${
+                    selectedPurchase.status === 'منجز' ? 'text-green-600' :
+                    selectedPurchase.status === 'قيد التنفيذ' ? 'text-yellow-600' :
+                    selectedPurchase.status === 'معلق' ? 'text-red-600' :
+                    'text-gray-600'
+                  }`}>{selectedPurchase.status}</p>
+                </div>
+              </div>
+
+              {/* الجهة الطالبة */}
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400">الجهة الطالبة</p>
+                <p className="font-semibold text-gray-800">{selectedPurchase.requester}</p>
+              </div>
+
+              {/* الوصف */}
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400">الوصف</p>
+                <p className="text-gray-700">{selectedPurchase.description || 'لا يوجد وصف'}</p>
+              </div>
+
+              {/* صاحب الفاتورة */}
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400">صاحب الفاتورة</p>
+                <p className="text-gray-700">{selectedPurchase.invoice_owner || 'غير محدد'}</p>
+              </div>
+
+              {/* المستلم */}
+              <div className="bg-gray-50 rounded-xl p-3">
+                <p className="text-xs text-gray-400">المستلم</p>
+                <p className="text-gray-700">{selectedPurchase.receiver || 'غير محدد'}</p>
+              </div>
+
+              {/* التواريخ */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">تاريخ الطلب</p>
+                  <p className="font-semibold text-gray-800">{formatFullDate(selectedPurchase.date)}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">تاريخ التسليم</p>
+                  <p className={`font-semibold ${
+                    new Date(selectedPurchase.delivery_date) < new Date() && 
+                    selectedPurchase.status !== 'منجز' ? 'text-red-600' : 'text-gray-800'
+                  }`}>{formatFullDate(selectedPurchase.delivery_date)}</p>
+                </div>
+              </div>
+
+              {/* أيام التأخير */}
+              {selectedPurchase.status !== 'منجز' && 
+               new Date(selectedPurchase.delivery_date) < new Date() && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                  <p className="text-xs text-red-400">أيام التأخير</p>
+                  <p className="font-bold text-red-600 text-xl">
+                    {getDaysOverdue(selectedPurchase.delivery_date)} يوم
+                  </p>
+                </div>
+              )}
+
+              {/* الملحوظات */}
+              {selectedPurchase.notes && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">ملحوظات</p>
+                  <p className="text-gray-700">{selectedPurchase.notes}</p>
+                </div>
+              )}
+
+              {/* الأزرار */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  onClick={handleCloseDetails}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors"
+                >
+                  إغلاق
+                </button>
+                <button
+                  onClick={() => {
+                    handleCloseDetails();
+                    // ✅ يمكن إضافة توجيه إلى صفحة التعديل
+                    // navigate(`/purchases/${selectedPurchase.id}`);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  <i className="fas fa-edit ml-2"></i>
+                  تعديل
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ CSS للإضافات */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+      `}</style>
+    </>
   );
 };
 
