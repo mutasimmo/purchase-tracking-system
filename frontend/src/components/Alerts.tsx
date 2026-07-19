@@ -1,5 +1,5 @@
 // src/components/Alerts.tsx
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { purchaseApi } from '../api/purchaseApi';
 import type { Purchase } from '../types/purchase.types';
 import toast from 'react-hot-toast';
@@ -23,6 +23,10 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   // ✅ حالة الطلب المختار لعرض التفاصيل
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [showModal, setShowModal] = useState(false);
+  
+  // ✅ مرجع للنافذة المنبثقة للتمرير التلقائي
+  const modalRef = useRef<HTMLDivElement>(null);
+  const modalContentRef = useRef<HTMLDivElement>(null);
 
   // ============================================
   // ✅ جلب التنبيهات
@@ -62,12 +66,22 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   }, []);
 
   // ============================================
-  // ✅ فتح تفاصيل الطلب
+  // ✅ فتح تفاصيل الطلب مع تمرير تلقائي
   // ============================================
 
   const openDetails = (purchase: Purchase) => {
     setSelectedPurchase(purchase);
     setShowModal(true);
+    
+    // ✅ تمرير تلقائي إلى النافذة المنبثقة بعد فتحها
+    setTimeout(() => {
+      if (modalRef.current) {
+        modalRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }
+    }, 100);
   };
 
   // ============================================
@@ -140,6 +154,20 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
     );
     return diff;
   };
+
+  // ============================================
+  // ✅ تأثير التمرير التلقائي عند فتح النافذة
+  // ============================================
+
+  useEffect(() => {
+    if (showModal && modalContentRef.current) {
+      // تمرير تلقائي إلى محتوى النافذة
+      modalContentRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  }, [showModal]);
 
   // ============================================
   // ✅ عرض رسالة عند التحميل
@@ -291,7 +319,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
           </div>
         )}
 
-        {/* أكثر الطلبات تأخراً - النسخة الآمنة */}
+        {/* أكثر الطلبات تأخراً */}
         {stats.mostOverdue && stats.mostOverdue.length > 0 && (
           <div className="mb-6">
             <h3 className="font-bold text-purple-600 mb-3 flex items-center gap-2">
@@ -304,7 +332,6 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                   key={index} 
                   className="bg-purple-50 border-r-4 border-purple-500 p-3 rounded-xl flex justify-between items-center cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
                   onClick={() => {
-                    // ✅ البحث الآمن عن الطلب في قائمة overdue
                     let found = null;
                     if (Array.isArray(overdue) && overdue.length > 0) {
                       found = overdue.find(p => p.id === item.id);
@@ -312,7 +339,6 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                     if (found) {
                       openDetails(found);
                     } else {
-                      // ✅ إذا لم يتم العثور، استخدم البيانات الموجودة
                       openDetails({
                         id: item.id || Date.now(),
                         request_number: item.request_number || 'غير معروف',
@@ -365,14 +391,16 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* ============================================
-          نافذة تفاصيل الطلب (Modal)
+          نافذة تفاصيل الطلب (Modal) مع تمرير تلقائي
           ============================================ */}
       {showModal && selectedPurchase && (
         <div 
+          ref={modalRef}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
           onClick={closeDetails}
         >
           <div 
+            ref={modalContentRef}
             className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -395,7 +423,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
               </button>
             </div>
 
-            {/* المحتوى */}
+            {/* المحتوى مع تمرير تلقائي */}
             <div className="p-6 space-y-4">
               {/* رقم الطلب والحالة */}
               <div className="grid grid-cols-2 gap-4">
