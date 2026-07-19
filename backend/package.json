@@ -22,6 +22,7 @@
     "jsonwebtoken": "^9.0.3",
     "node-cache": "^5.1.2",
     "node-cron": "^4.6.0",
+    "rimraf": "^5.0.5",
     "socket.io": "^4.8.3",
     "winston": "^3.19.0",
     "zod": "^3.23.8"
@@ -37,7 +38,6 @@
     "@types/node-cron": "^3.0.11",
     "@types/socket.io": "^3.0.0",
     "nodemon": "^3.0.3",
-    "rimraf": "^5.0.5",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.0",
     "typescript": "^5.3.3"
