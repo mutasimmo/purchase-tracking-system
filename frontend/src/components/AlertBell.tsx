@@ -14,13 +14,21 @@ const AlertBell: React.FC<Props> = ({ onClick }) => {
   const previousCountRef = useRef(0);
 
   // ============================================
-  // ✅ جلب عدد التنبيهات
+  // ✅ جلب عدد التنبيهات - النسخة المعدلة
   // ============================================
 
   const loadAlertCount = useCallback(async () => {
     try {
       const stats = await purchaseApi.getAlertStats();
-      const count = (stats.overdue || 0) + (stats.expiringToday || 0);
+      
+      // ✅ استخراج البيانات بشكل صحيح
+      const overdueCount = stats.data?.overdue || stats.overdue || 0;
+      const expiringTodayCount = stats.data?.expiringToday || stats.expiringToday || 0;
+      const count = overdueCount + expiringTodayCount;
+      
+      console.log('🔔 AlertBell - Overdue:', overdueCount);
+      console.log('🔔 AlertBell - Expiring Today:', expiringTodayCount);
+      console.log('🔔 AlertBell - Total:', count);
       
       // ✅ التحقق من وجود تنبيهات جديدة
       if (count > previousCountRef.current) {
@@ -34,7 +42,7 @@ const AlertBell: React.FC<Props> = ({ onClick }) => {
       setLoading(false);
     } catch (error) {
       console.error('Error loading alert count:', error);
-      // ✅ عدم عرض رسالة خطأ للمستخدم لتجنب الإزعاج
+      setLoading(false);
     }
   }, []);
 
