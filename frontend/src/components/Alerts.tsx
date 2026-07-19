@@ -199,14 +199,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
 
         {/* إحصائيات سريعة */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div 
-            className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform cursor-pointer"
-            onClick={() => {
-              if (overdue.length > 0) {
-                openDetails(overdue[0]);
-              }
-            }}
-          >
+          <div className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
             <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
             <div className="text-xs text-gray-600">متأخر</div>
           </div>
@@ -298,7 +291,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
           </div>
         )}
 
-        {/* أكثر الطلبات تأخراً */}
+        {/* أكثر الطلبات تأخراً - النسخة الآمنة */}
         {stats.mostOverdue && stats.mostOverdue.length > 0 && (
           <div className="mb-6">
             <h3 className="font-bold text-purple-600 mb-3 flex items-center gap-2">
@@ -311,9 +304,34 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                   key={index} 
                   className="bg-purple-50 border-r-4 border-purple-500 p-3 rounded-xl flex justify-between items-center cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
                   onClick={() => {
-                    // البحث عن الطلب في قائمة overdue
-                    const found = overdue.find(p => p.id === item.id);
-                    if (found) openDetails(found);
+                    // ✅ البحث الآمن عن الطلب في قائمة overdue
+                    let found = null;
+                    if (Array.isArray(overdue) && overdue.length > 0) {
+                      found = overdue.find(p => p.id === item.id);
+                    }
+                    if (found) {
+                      openDetails(found);
+                    } else {
+                      // ✅ إذا لم يتم العثور، استخدم البيانات الموجودة
+                      openDetails({
+                        id: item.id || Date.now(),
+                        request_number: item.request_number || 'غير معروف',
+                        requester: item.requester || 'غير معروف',
+                        description: item.description || '',
+                        date: item.delivery_date || new Date().toISOString().split('T')[0],
+                        delivery_date: item.delivery_date || new Date().toISOString().split('T')[0],
+                        status: item.status || 'قيد التنفيذ',
+                        receiver: item.receiver || 'غير محدد',
+                        invoice_owner: item.invoice_owner || '',
+                        notes: item.notes || '',
+                        priority: item.priority || 'medium',
+                        department: item.department || '',
+                        created_at: item.created_at || new Date().toISOString(),
+                        updated_at: item.updated_at || new Date().toISOString(),
+                        created_by: item.created_by || null,
+                        assigned_to: item.assigned_to || null
+                      } as Purchase);
+                    }
                   }}
                 >
                   <div>
@@ -480,10 +498,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                 <button
                   onClick={() => {
                     closeDetails();
-                    // يمكن إضافة توجيه إلى صفحة التعديل
-                    // navigate(`/purchases/${selectedPurchase.id}/edit`);
-                    toast('سيتم توجيهك إلى صفحة تعديل الطلب', { icon: 'ℹ️' });
-
+                    toast('📝 سيتم توجيهك إلى صفحة تعديل الطلب', { icon: '📝' });
                   }}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
                 >
