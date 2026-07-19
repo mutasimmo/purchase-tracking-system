@@ -737,53 +737,94 @@ export const getExpiringToday = async (req: Request, res: Response) => {
 // Alert Statistics
 // ============================================
 
+
 export const getAlertStats = async (req: Request, res: Response) => {
   try {
-    const stats = await getOrSet(
-      CacheKeys.ALERT_STATS(),
-      async () => {
-        const overdue = await PurchaseRepository.getOverdue();
-        const expiringToday = await PurchaseRepository.getExpiringToday();
-        
-        // Get expiring soon (next 2-4 days)
-        const supabase = getSupabase();
-        const today = new Date();
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const future4 = new Date(today);
-        future4.setDate(future4.getDate() + 4);
-        
-        const { data: expiringSoon } = await supabase
-          .from('purchases')
-          .select('*')
-          .is('deleted_at', null)
-          .not('status', 'in', '("منجز","ملغي")')
-          .gte('delivery_date', tomorrow.toISOString().split('T')[0])
-          .lte('delivery_date', future4.toISOString().split('T')[0]);
+    console.log('🔔 [getAlertStats] Fetching alert stats...');
+    
+    // ✅ جلب البيانات مباشرة من قاعدة البيانات (بدون كاش)
+    const supabase = getSupabase();
+    const today = new Date().toISOString().split('T')[0];
+    
+    // ✅ 1. جلب الطلبات المتأخرة
+    const { data: overdueData, error: overdueError } = await supabase
+      .from('purchases')
+      .select('*')
+      .is('deleted_at', null)
+      .not('status', 'in', '("منجز","ملغي")')
+      .lt('delivery_date', today)
+      .order('delivery_date', { ascending: true });
 
-        return {
-          success: true,
-          data: {
-            overdue: overdue.length,
-            expiringToday: expiringToday.length,
-            expiringSoon: expiringSoon?.length || 0,
-            mostOverdue: overdue.slice(0, 5).map(p => ({
-              id: p.id,
-              request_number: p.request_number,
-              requester: p.requester,
-              description: p.description,
-              delivery_date: p.delivery_date,
-              status: p.status,
-              days_overdue: Math.floor((new Date().getTime() - new Date(p.delivery_date).getTime()) / (1000 * 60 * 60 * 24))
-            }))
-          }
-        };
-      },
-      60
-    );
+    if (overdueError) {
+      console.error('❌ Overdue error:', overdueError);
+      throw overdueError;
+    }
 
-    res.json(stats);
+    console.log(`✅ Overdue: ${overdueData?.length || 0}`);
+
+    // ✅ 2. جلب الطلبات المنتهية اليوم
+    const { data: expiringTodayData, error: expiringTodayError } = await supabase
+      .from('purchases')
+      .select('*')
+      .is('deleted_at', null)
+      .not('status', 'in', '("منجز","ملغي")')
+      .eq('delivery_date', today)
+      .order('delivery_date', { ascending: true });
+
+    if (expiringTodayError) {
+      console.error('❌ Expiring today error:', expiringTodayError);
+      throw expiringTodayError;
+    }
+
+    console.log(`✅ Expiring Today: ${expiringTodayData?.length || 0}`);
+
+    // ✅ 3. جلب الطلبات التي ستنتهي قريباً (2-4 أيام)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const future4 = new Date();
+    future4.setDate(future4.getDate() + 4);
+
+    const { data: expiringSoonData, error: expiringSoonError } = await supabase
+      .from('purchases')
+      .select('*')
+      .is('deleted_at', null)
+      .not('status', 'in', '("منجز","ملغي")')
+      .gte('delivery_date', tomorrow.toISOString().split('T')[0])
+      .lte('delivery_date', future4.toISOString().split('T')[0])
+      .order('delivery_date', { ascending: true });
+
+    if (expiringSoonError) {
+      console.error('❌ Expiring soon error:', expiringSoonError);
+      throw expiringSoonError;
+    }
+
+    console.log(`✅ Expiring Soon: ${expiringSoonData?.length || 0}`);
+
+    // ✅ 4. حساب عدد الأيام المتأخرة
+    const overdue = (overdueData || []).map(p => ({
+      ...p,
+      days_overdue: Math.floor((new Date().getTime() - new Date(p.delivery_date).getTime()) / (1000 * 60 * 60 * 24))
+    }));
+
+    // ✅ 5. الرد
+    const response = {
+      success: true,
+      data: {
+        overdue: overdue.length,
+        expiringToday: (expiringTodayData || []).length,
+        expiringSoon: (expiringSoonData || []).length,
+        mostOverdue: overdue.slice(0, 5),
+        overdueList: overdue,
+        expiringTodayList: expiringTodayData || [],
+        expiringSoonList: expiringSoonData || []
+      }
+    };
+
+    console.log('📊 [getAlertStats] Response:', JSON.stringify(response, null, 2));
+    
+    res.json(response);
   } catch (error) {
+    console.error('❌ [getAlertStats] Error:', error);
     logger.error('Error fetching alert stats:', error);
     res.status(500).json({ 
       success: false,
@@ -792,7 +833,6 @@ export const getAlertStats = async (req: Request, res: Response) => {
     });
   }
 };
-
 // ============================================
 // Audit Logs
 // ============================================
