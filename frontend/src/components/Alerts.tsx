@@ -11,7 +11,6 @@ interface Props {
 const Alerts: React.FC<Props> = ({ onClose }) => {
   const [overdue, setOverdue] = useState<Purchase[]>([]);
   const [expiringToday, setExpiringToday] = useState<Purchase[]>([]);
-  const [expiringSoon, setExpiringSoon] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     overdue: 0,
@@ -22,12 +21,14 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   // ============================================
-  // ✅ جلب التنبيهات - النسخة المعدلة
+  // ✅ جلب التنبيهات - النسخة النهائية
   // ============================================
 
   const loadAlerts = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // ✅ جلب البيانات
       const [overdueData, expiringData, statsData] = await Promise.all([
         purchaseApi.getOverdue(),
         purchaseApi.getExpiringToday(),
@@ -42,7 +43,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
       setOverdue(overdueData || []);
       setExpiringToday(expiringData || []);
       
-      // ✅ استخراج الإحصائيات بشكل صحيح من statsData.data
+      // ✅ استخراج الإحصائيات من data.data (التنسيق الصحيح)
       const statsInfo = statsData?.data || statsData || {};
       setStats({
         overdue: statsInfo.overdue || 0,
@@ -51,9 +52,14 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
         mostOverdue: statsInfo.mostOverdue || []
       });
       
+      console.log('📊 Updated Stats:', {
+        overdue: statsInfo.overdue || 0,
+        expiringToday: statsInfo.expiringToday || 0
+      });
+      
     } catch (error) {
       toast.error('❌ حدث خطأ في تحميل التنبيهات');
-      console.error(error);
+      console.error('❌ Load Alerts Error:', error);
     } finally {
       setLoading(false);
     }
@@ -65,8 +71,6 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
 
   useEffect(() => {
     loadAlerts();
-    
-    // ✅ تحديث كل 60 ثانية
     const interval = setInterval(loadAlerts, 60000);
     return () => clearInterval(interval);
   }, [loadAlerts]);
@@ -151,7 +155,6 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* زر التحديث */}
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -160,7 +163,6 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
           >
             <i className={`fas fa-sync-alt ${refreshing ? 'animate-spin' : ''}`}></i>
           </button>
-          {/* زر الإغلاق */}
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-xl"
