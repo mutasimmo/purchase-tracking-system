@@ -20,9 +20,9 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   });
   const [refreshing, setRefreshing] = useState(false);
   
-  // ✅ حالة النافذة المنبثقة للتفاصيل
+  // ✅ حالة الطلب المختار لعرض التفاصيل
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   // ============================================
   // ✅ جلب التنبيهات
@@ -65,17 +65,17 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   // ✅ فتح تفاصيل الطلب
   // ============================================
 
-  const handleViewDetails = (purchase: Purchase) => {
+  const openDetails = (purchase: Purchase) => {
     setSelectedPurchase(purchase);
-    setShowDetails(true);
+    setShowModal(true);
   };
 
   // ============================================
   // ✅ إغلاق التفاصيل
   // ============================================
 
-  const handleCloseDetails = () => {
-    setShowDetails(false);
+  const closeDetails = () => {
+    setShowModal(false);
     setSelectedPurchase(null);
   };
 
@@ -164,7 +164,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
 
   return (
     <>
-      {/* ✅ القائمة الرئيسية */}
+      {/* القائمة الرئيسية */}
       <div className="bg-white rounded-3xl shadow-2xl p-4 sm:p-6 border border-gray-100 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -199,7 +199,14 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
 
         {/* إحصائيات سريعة */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform">
+          <div 
+            className="bg-red-50 rounded-2xl p-4 text-center hover:scale-105 transition-transform cursor-pointer"
+            onClick={() => {
+              if (overdue.length > 0) {
+                openDetails(overdue[0]);
+              }
+            }}
+          >
             <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
             <div className="text-xs text-gray-600">متأخر</div>
           </div>
@@ -227,28 +234,29 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                 return (
                   <div 
                     key={purchase.id} 
-                    onClick={() => handleViewDetails(purchase)}
-                    className={`${isCritical ? 'bg-red-100 border-red-600' : 'bg-red-50 border-red-500'} border-r-4 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow cursor-pointer hover:scale-[1.02]`}
+                    onClick={() => openDetails(purchase)}
+                    className={`${isCritical ? 'bg-red-100 border-red-600' : 'bg-red-50 border-red-500'} border-r-4 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-lg transition-all cursor-pointer hover:scale-[1.02]`}
                   >
-                    <div>
+                    <div className="flex-1">
                       <div className="font-medium text-gray-800 flex items-center gap-2">
                         {isCritical && (
-                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
+                          <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full animate-pulse">
                             حرج
                           </span>
                         )}
                         {purchase.request_number}
                       </div>
                       <div className="text-sm text-gray-600">{purchase.requester}</div>
-                      <div className="text-xs text-gray-400">{purchase.description?.substring(0, 50)}</div>
+                      <div className="text-xs text-gray-400 line-clamp-1">{purchase.description}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0">
                       <div className={`text-sm font-bold ${isCritical ? 'text-red-700' : 'text-red-600'}`}>
                         متأخر {days} يوم
                       </div>
                       <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
-                      <div className="text-xs text-blue-500 mt-1">
-                        <i className="fas fa-chevron-left"></i> اضغط للتفاصيل
+                      <div className="text-xs text-blue-500 mt-1 flex items-center gap-1 justify-end">
+                        <span>اضغط للتفاصيل</span>
+                        <i className="fas fa-chevron-left text-[10px]"></i>
                       </div>
                     </div>
                   </div>
@@ -269,18 +277,52 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
               {expiringToday.map((purchase) => (
                 <div 
                   key={purchase.id} 
-                  onClick={() => handleViewDetails(purchase)}
-                  className="bg-orange-50 border-r-4 border-orange-500 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-md transition-shadow cursor-pointer hover:scale-[1.02]"
+                  onClick={() => openDetails(purchase)}
+                  className="bg-orange-50 border-r-4 border-orange-500 p-3 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:shadow-lg transition-all cursor-pointer hover:scale-[1.02]"
                 >
-                  <div>
+                  <div className="flex-1">
                     <div className="font-medium text-gray-800">{purchase.request_number}</div>
                     <div className="text-sm text-gray-600">{purchase.requester}</div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <div className="text-sm font-bold text-orange-600">ينتهي اليوم</div>
                     <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
-                    <div className="text-xs text-blue-500 mt-1">
-                      <i className="fas fa-chevron-left"></i> اضغط للتفاصيل
+                    <div className="text-xs text-blue-500 mt-1 flex items-center gap-1 justify-end">
+                      <span>اضغط للتفاصيل</span>
+                      <i className="fas fa-chevron-left text-[10px]"></i>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* أكثر الطلبات تأخراً */}
+        {stats.mostOverdue && stats.mostOverdue.length > 0 && (
+          <div className="mb-6">
+            <h3 className="font-bold text-purple-600 mb-3 flex items-center gap-2">
+              <i className="fas fa-fire"></i>
+              أكثر الطلبات تأخراً
+            </h3>
+            <div className="space-y-2">
+              {stats.mostOverdue.slice(0, 5).map((item: any, index: number) => (
+                <div 
+                  key={index} 
+                  className="bg-purple-50 border-r-4 border-purple-500 p-3 rounded-xl flex justify-between items-center cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]"
+                  onClick={() => {
+                    // البحث عن الطلب في قائمة overdue
+                    const found = overdue.find(p => p.id === item.id);
+                    if (found) openDetails(found);
+                  }}
+                >
+                  <div>
+                    <div className="font-medium text-gray-800">{item.request_number}</div>
+                    <div className="text-sm text-gray-600">{item.requester}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-purple-600">
+                      متأخر {Math.round(item.days_overdue)} يوم
                     </div>
                   </div>
                 </div>
@@ -305,11 +347,17 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
       </div>
 
       {/* ============================================
-          ✅ نافذة تفاصيل الطلب (Modal)
+          نافذة تفاصيل الطلب (Modal)
           ============================================ */}
-      {showDetails && selectedPurchase && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideUp">
+      {showModal && selectedPurchase && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+          onClick={closeDetails}
+        >
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header */}
             <div className="sticky top-0 bg-white/95 backdrop-blur-sm border-b p-4 flex justify-between items-center rounded-t-3xl">
               <div className="flex items-center gap-3">
@@ -322,7 +370,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                 </div>
               </div>
               <button
-                onClick={handleCloseDetails}
+                onClick={closeDetails}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-xl"
               >
                 <i className="fas fa-times text-xl"></i>
@@ -331,7 +379,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
 
             {/* المحتوى */}
             <div className="p-6 space-y-4">
-              {/* رقم الطلب */}
+              {/* رقم الطلب والحالة */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 rounded-xl p-3">
                   <p className="text-xs text-gray-400">رقم الطلب</p>
@@ -372,6 +420,21 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                 <p className="text-gray-700">{selectedPurchase.receiver || 'غير محدد'}</p>
               </div>
 
+              {/* الأولوية */}
+              {selectedPurchase.priority && (
+                <div className="bg-gray-50 rounded-xl p-3">
+                  <p className="text-xs text-gray-400">الأولوية</p>
+                  <p className={`font-semibold ${
+                    selectedPurchase.priority === 'high' ? 'text-red-600' :
+                    selectedPurchase.priority === 'medium' ? 'text-yellow-600' :
+                    'text-green-600'
+                  }`}>
+                    {selectedPurchase.priority === 'high' ? 'عالية' :
+                     selectedPurchase.priority === 'medium' ? 'متوسطة' : 'منخفضة'}
+                  </p>
+                </div>
+              )}
+
               {/* التواريخ */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 rounded-xl p-3">
@@ -409,16 +472,18 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
               {/* الأزرار */}
               <div className="flex gap-3 pt-4 border-t">
                 <button
-                  onClick={handleCloseDetails}
+                  onClick={closeDetails}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors"
                 >
                   إغلاق
                 </button>
                 <button
                   onClick={() => {
-                    handleCloseDetails();
-                    // ✅ يمكن إضافة توجيه إلى صفحة التعديل
-                    // navigate(`/purchases/${selectedPurchase.id}`);
+                    closeDetails();
+                    // يمكن إضافة توجيه إلى صفحة التعديل
+                    // navigate(`/purchases/${selectedPurchase.id}/edit`);
+                    toast('سيتم توجيهك إلى صفحة تعديل الطلب', { icon: 'ℹ️' });
+
                   }}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
                 >
@@ -431,21 +496,13 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
         </div>
       )}
 
-      {/* ✅ CSS للإضافات */}
+      {/* CSS */}
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-        .animate-slideUp {
-          animation: slideUp 0.3s ease-out;
+        .line-clamp-1 {
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
       `}</style>
     </>
