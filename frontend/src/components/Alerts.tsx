@@ -22,7 +22,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
   const [refreshing, setRefreshing] = useState(false);
 
   // ============================================
-  // ✅ جلب التنبيهات
+  // ✅ جلب التنبيهات - النسخة المعدلة
   // ============================================
 
   const loadAlerts = useCallback(async () => {
@@ -34,9 +34,23 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
         purchaseApi.getAlertStats()
       ]);
       
+      console.log('📊 Overdue Data:', overdueData);
+      console.log('📊 Expiring Data:', expiringData);
+      console.log('📊 Stats Data:', statsData);
+      
+      // ✅ تحديث القوائم
       setOverdue(overdueData || []);
       setExpiringToday(expiringData || []);
-      setStats(statsData);
+      
+      // ✅ استخراج الإحصائيات بشكل صحيح من statsData.data
+      const statsInfo = statsData?.data || statsData || {};
+      setStats({
+        overdue: statsInfo.overdue || 0,
+        expiringToday: statsInfo.expiringToday || 0,
+        expiringSoon: statsInfo.expiringSoon || 0,
+        mostOverdue: statsInfo.mostOverdue || []
+      });
+      
     } catch (error) {
       toast.error('❌ حدث خطأ في تحميل التنبيهات');
       console.error(error);
@@ -228,7 +242,7 @@ const Alerts: React.FC<Props> = ({ onClose }) => {
                   <div className="text-sm text-gray-600">{purchase.requester}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-bold text-orange-600">ينتهي غداً</div>
+                  <div className="text-sm font-bold text-orange-600">ينتهي اليوم</div>
                   <div className="text-xs text-gray-500">{formatDate(purchase.delivery_date)}</div>
                 </div>
               </div>
