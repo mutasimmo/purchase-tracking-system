@@ -72,38 +72,29 @@ const PurchaseForm: React.FC<Props> = ({
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
     
-    // ✅ حساب نسبة الماوس داخل الفورم (0 إلى 1)
     const ratio = mouseY / height;
-    
-    // ✅ أقصى مسافة للتمرير
     const maxScroll = container.scrollHeight - container.clientHeight;
     
     if (maxScroll <= 0) return;
     
-    // ✅ تمرير بناءً على موقع الماوس
-    // الجزء العلوي (0-30%) → تمرير لأعلى
     if (ratio < 0.3) {
       const targetScroll = (ratio / 0.3) * maxScroll * 0.3;
       container.scrollTop = targetScroll;
     }
-    // الجزء السفلي (70-100%) → تمرير لأسفل
     else if (ratio > 0.7) {
       const targetScroll = maxScroll - ((1 - ratio) / 0.3) * maxScroll * 0.3;
       container.scrollTop = Math.max(0, targetScroll);
     }
-    // الجزء الأوسط (30-70%) → تمرير متوسط
     else {
       const targetScroll = (ratio - 0.3) / 0.4 * maxScroll;
       container.scrollTop = Math.max(0, Math.min(targetScroll, maxScroll));
     }
   };
 
-  const handleMouseLeave = () => {
-    // ✅ لا تفعل شيئاً عند مغادرة الماوس
-  };
+  const handleMouseLeave = () => {};
 
   // ============================================
-  // ✅ تحديث الفورم عند تغيير nextRequestNumber
+  // ✅ باقي الدوال (بدون تغيير)
   // ============================================
 
   useEffect(() => {
@@ -117,10 +108,6 @@ const PurchaseForm: React.FC<Props> = ({
       }
     }
   }, [nextRequestNumber, isEditing, errors.request_number]);
-
-  // ============================================
-  // ✅ تحميل البيانات للتعديل
-  // ============================================
 
   useEffect(() => {
     if (purchase) {
@@ -138,47 +125,33 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, [purchase]);
 
-  // ============================================
-  // ✅ التحقق من صحة البيانات
-  // ============================================
-
   const validateForm = (data: typeof formData): Record<string, string> => {
     const errors: Record<string, string> = {};
     
     if (!data.request_number.trim()) {
       errors.request_number = 'رقم الطلب مطلوب';
     }
-    
     if (!data.date) {
       errors.date = 'التاريخ مطلوب';
     }
-    
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
-    
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
     }
-    
     if (data.date && data.delivery_date && data.delivery_date < data.date) {
       errors.delivery_date = 'تاريخ التسليم يجب أن يكون بعد تاريخ الطلب';
     }
-    
     return errors;
   };
 
   const validationErrors = useMemo(() => validateForm(formData), [formData]);
   const isFormValid = Object.keys(validationErrors).length === 0;
 
-  // ============================================
-  // ✅ معالج التغيير
-  // ============================================
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -187,21 +160,14 @@ const PurchaseForm: React.FC<Props> = ({
   const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name } = e.target;
     setTouched({ ...touched, [name]: true });
-    
     const fieldErrors = validateForm(formData);
     if (fieldErrors[name]) {
       setErrors({ ...errors, [name]: fieldErrors[name] });
     }
   };
 
-  // ============================================
-  // ✅ معالج الإرسال
-  // ============================================
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    console.log('📤 Form submitted');
     
     const allErrors = validateForm(formData);
     setErrors(allErrors);
@@ -234,13 +200,8 @@ const PurchaseForm: React.FC<Props> = ({
       notes: formData.notes?.trim() || ''
     };
     
-    console.log('📤 Submitting data:', submitData);
     onSubmit(submitData);
   };
-
-  // ============================================
-  // ✅ معالج الحذف
-  // ============================================
 
   const handleDelete = () => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء')) {
@@ -249,10 +210,6 @@ const PurchaseForm: React.FC<Props> = ({
   };
 
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
-
-  // ============================================
-  // ✅ Render
-  // ============================================
 
   return (
     <form 
@@ -510,7 +467,6 @@ const PurchaseForm: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* عرض عدد الأخطاء */}
         {Object.keys(errors).length > 0 && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm flex items-center gap-2">
