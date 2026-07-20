@@ -39,8 +39,11 @@ const PurchaseForm: React.FC<Props> = ({
   const firstInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ حالة التمرير
+  // ============================================
+  // ✅ حالة التمرير التلقائي
+  // ============================================
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
+  const [isHovering, setIsHovering] = useState(false);
   
   // ✅ متغيرات التمرير المحسّنة
   const animationRef = useRef<number | null>(null);
@@ -48,9 +51,8 @@ const PurchaseForm: React.FC<Props> = ({
   const isScrollingRef = useRef<boolean>(false);
 
   // ============================================
-  // ✅ Auto-scroll عند فتح الفورم
+  // ✅ 1. التمرير التلقائي عند فتح الفورم
   // ============================================
-
   useEffect(() => {
     setTimeout(() => {
       if (formRef.current) {
@@ -68,9 +70,13 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ Auto-scroll عند اقتراب المؤشر من الحواف (محسّن)
+  // ✅ 2. التمرير التلقائي عند اقتراب المؤشر من الحواف
   // ============================================
 
+  /**
+   * حلقة التمرير المستمرة باستخدام requestAnimationFrame
+   * توفر تمريراً سلساً ومتحكماً به
+   */
   const startScrolling = useCallback(() => {
     const container = scrollContainerRef.current;
     if (!container) {
@@ -94,7 +100,7 @@ const PurchaseForm: React.FC<Props> = ({
     const currentScroll = container.scrollTop;
     let newScrollTop = currentScroll + speed;
     
-    // ✅ منع التجاوز
+    // ✅ منع التجاوز (عدم التمرير فوق أو تحت المحتوى)
     if (newScrollTop < 0) {
       newScrollTop = 0;
       targetSpeedRef.current = 0;
@@ -115,14 +121,21 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, []);
 
+  /**
+   * معالج حركة الماوس - يحدد اتجاه وسرعة التمرير
+   */
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (!scrollContainerRef.current) return;
-    
     const container = scrollContainerRef.current;
+    if (!container) return;
+    
+    // ✅ الحصول على إحداثيات الماوس داخل الحاوية
     const rect = container.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
     const maxScroll = container.scrollHeight - container.clientHeight;
+    
+    // ✅ للتصحيح - يمكن إزالة هذه السطور بعد التأكد من العمل
+    console.log('🖱️ Mouse Y:', mouseY, 'Height:', height, 'MaxScroll:', maxScroll);
     
     if (maxScroll <= 0) {
       targetSpeedRef.current = 0;
@@ -149,7 +162,7 @@ const PurchaseForm: React.FC<Props> = ({
     
     // ✅ حساب سرعة التمرير بناءً على قرب المؤشر من الحافة
     let speed = 0;
-    const maxSpeed = 6; // أقصى سرعة
+    const maxSpeed = 8; // أقصى سرعة (بكسل لكل إطار)
     
     if (mouseY < centerStart) {
       // ✅ المؤشر في الأعلى → تمرير لأعلى (سرعة سالبة)
@@ -176,7 +189,19 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, [startScrolling]);
 
+  /**
+   * عند دخول الماوس إلى الحاوية
+   */
+  const handleMouseEnter = useCallback(() => {
+    setIsHovering(true);
+    console.log('🐭 Mouse entered container');
+  }, []);
+
+  /**
+   * عند خروج الماوس من الحاوية - إيقاف التمرير
+   */
   const handleMouseLeave = useCallback(() => {
+    setIsHovering(false);
     targetSpeedRef.current = 0;
     setScrollDirection('none');
     if (animationRef.current) {
@@ -184,9 +209,10 @@ const PurchaseForm: React.FC<Props> = ({
       animationRef.current = null;
       isScrollingRef.current = false;
     }
+    console.log('🐭 Mouse left container');
   }, []);
 
-  // ✅ تنظيف عند فك التثبيت
+  // ✅ تنظيف عند فك تثبيت المكون
   useEffect(() => {
     return () => {
       if (animationRef.current) {
@@ -198,7 +224,7 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ تحديث الفورم عند تغيير nextRequestNumber
+  // ✅ 3. باقي منطق الفورم (بدون تغيير)
   // ============================================
 
   useEffect(() => {
@@ -212,10 +238,6 @@ const PurchaseForm: React.FC<Props> = ({
       }
     }
   }, [nextRequestNumber, isEditing, errors.request_number]);
-
-  // ============================================
-  // ✅ تحميل البيانات للتعديل
-  // ============================================
 
   useEffect(() => {
     if (purchase) {
@@ -233,47 +255,33 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, [purchase]);
 
-  // ============================================
-  // ✅ التحقق من صحة البيانات
-  // ============================================
-
   const validateForm = (data: typeof formData): Record<string, string> => {
     const errors: Record<string, string> = {};
     
     if (!data.request_number.trim()) {
       errors.request_number = 'رقم الطلب مطلوب';
     }
-    
     if (!data.date) {
       errors.date = 'التاريخ مطلوب';
     }
-    
     if (!data.requester.trim()) {
       errors.requester = 'الجهة الطالبة مطلوبة';
     }
-    
     if (!data.description.trim()) {
       errors.description = 'وصف الطلب مطلوب';
     }
-    
     if (data.date && data.delivery_date && data.delivery_date < data.date) {
       errors.delivery_date = 'تاريخ التسليم يجب أن يكون بعد تاريخ الطلب';
     }
-    
     return errors;
   };
 
   const validationErrors = useMemo(() => validateForm(formData), [formData]);
   const isFormValid = Object.keys(validationErrors).length === 0;
 
-  // ============================================
-  // ✅ معالج التغيير
-  // ============================================
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
-    
     if (errors[name]) {
       setErrors({ ...errors, [name]: '' });
     }
@@ -282,21 +290,14 @@ const PurchaseForm: React.FC<Props> = ({
   const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name } = e.target;
     setTouched({ ...touched, [name]: true });
-    
     const fieldErrors = validateForm(formData);
     if (fieldErrors[name]) {
       setErrors({ ...errors, [name]: fieldErrors[name] });
     }
   };
 
-  // ============================================
-  // ✅ معالج الإرسال
-  // ============================================
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    console.log('📤 Form submitted');
     
     const allErrors = validateForm(formData);
     setErrors(allErrors);
@@ -329,13 +330,8 @@ const PurchaseForm: React.FC<Props> = ({
       notes: formData.notes?.trim() || ''
     };
     
-    console.log('📤 Submitting data:', submitData);
     onSubmit(submitData);
   };
-
-  // ============================================
-  // ✅ معالج الحذف
-  // ============================================
 
   const handleDelete = () => {
     if (window.confirm('هل أنت متأكد من حذف هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء')) {
@@ -346,29 +342,29 @@ const PurchaseForm: React.FC<Props> = ({
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
 
   // ============================================
-  // ✅ تحديد اتجاه التمرير
+  // ✅ 4. دوال مساعدة لعرض حالة التمرير
   // ============================================
 
   const getScrollIcon = () => {
-    if (scrollDirection === 'up') return '↑';
-    if (scrollDirection === 'down') return '↓';
-    return '•';
+    if (scrollDirection === 'up') return '⬆️';
+    if (scrollDirection === 'down') return '⬇️';
+    return '🖱️';
   };
 
   const getScrollColor = () => {
     if (scrollDirection === 'up') return 'text-green-600 border-green-300 bg-green-50';
     if (scrollDirection === 'down') return 'text-blue-600 border-blue-300 bg-blue-50';
-    return 'text-gray-400 border-gray-200 bg-gray-50';
+    return isHovering ? 'text-gray-600 border-gray-300 bg-gray-50' : 'text-gray-400 border-gray-200 bg-gray-50';
   };
 
   const getScrollText = () => {
-    if (scrollDirection === 'up') return '⬆️ تمرير لأعلى';
-    if (scrollDirection === 'down') return '⬇️ تمرير لأسفل';
-    return '🖱️ حرك الماوس للحواف';
+    if (scrollDirection === 'up') return 'تمرير لأعلى ⬆️';
+    if (scrollDirection === 'down') return 'تمرير لأسفل ⬇️';
+    return isHovering ? 'حرك الماوس للحواف' : 'مرر فوق المحتوى';
   };
 
   // ============================================
-  // ✅ Render
+  // ✅ 5. Render
   // ============================================
 
   return (
@@ -377,18 +373,25 @@ const PurchaseForm: React.FC<Props> = ({
       onSubmit={handleSubmit} 
       className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
     >
+      {/* ✅ الحاوية التي تستقبل أحداث الماوس */}
       <div 
         ref={scrollContainerRef}
+        onMouseEnter={handleMouseEnter}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         className="relative"
+        style={{ minHeight: '400px' }} // ✅ تأكد من أن الحاوية لها ارتفاع كاف
       >
         {/* ✅ مؤشر حالة التمرير */}
-        <div className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 z-10 transition-all duration-300 ${getScrollColor()}`}>
-          <span className="text-sm font-bold">{getScrollIcon()}</span>
-          <span>{getScrollText()}</span>
+        <div className={`absolute top-2 right-2 text-[10px] px-3 py-1.5 rounded-full border flex items-center gap-2 z-10 transition-all duration-300 ${getScrollColor()}`}>
+          <span className="text-base">{getScrollIcon()}</span>
+          <span className="font-medium">{getScrollText()}</span>
+          {isHovering && (
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          )}
         </div>
 
+        {/* ✅ رأس الفورم */}
         <div className="flex justify-between items-center mb-6 border-b pb-3">
           <h2 className="text-2xl font-bold text-gray-800">
             {isEditing ? '✏️ تعديل طلب' : '➕ إضافة طلب جديد'}
@@ -405,6 +408,7 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
+        {/* ✅ حقول الفورم */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* رقم الطلب */}
           <div>
@@ -597,7 +601,7 @@ const PurchaseForm: React.FC<Props> = ({
           </div>
         </div>
         
-        {/* الأزرار */}
+        {/* ✅ الأزرار */}
         <div className="mt-6 flex gap-3 justify-end border-t pt-4">
           <button
             type="button"
@@ -627,6 +631,7 @@ const PurchaseForm: React.FC<Props> = ({
           </button>
         </div>
 
+        {/* ✅ عرض الأخطاء */}
         {Object.keys(errors).length > 0 && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm flex items-center gap-2">
@@ -635,6 +640,21 @@ const PurchaseForm: React.FC<Props> = ({
             </p>
           </div>
         )}
+
+        {/* ✅ منطقة اختبار للتحقق من عمل الماوس */}
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-center">
+          <p className="text-sm text-gray-600">
+            🖱️ <span className="font-medium">حرك الماوس فوق هذه المنطقة</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            الحواف العلوية والسفلية (30%) ← تفعّل التمرير • المنتصف (40%) ← لا يتحرك
+          </p>
+          <div className="mt-2 flex justify-center gap-4 text-xs">
+            <span className="text-green-600">⬆️ أعلى</span>
+            <span className="text-gray-400">⬛ منتصف</span>
+            <span className="text-blue-600">⬇️ أسفل</span>
+          </div>
+        </div>
       </div>
     </form>
   );
