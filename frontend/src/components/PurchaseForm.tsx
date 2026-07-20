@@ -35,23 +35,22 @@ const PurchaseForm: React.FC<Props> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const isEditing = !!purchase;
 
-  const formRef = useRef<HTMLFormElement>(null);
+  // ✅ Refs
+  const formRef = useRef<HTMLFormElement>(null); // ✅ للتمرير
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const mouseContainerRef = useRef<HTMLDivElement>(null); // ✅ لأحداث الماوس فقط
 
-  // ============================================
-  // ✅ حالة التمرير التلقائي
-  // ============================================
+  // ✅ حالة التمرير
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
   const [isHovering, setIsHovering] = useState(false);
   
-  // ✅ متغيرات التمرير المحسّنة
+  // ✅ متغيرات التمرير
   const animationRef = useRef<number | null>(null);
   const targetSpeedRef = useRef<number>(0);
   const isScrollingRef = useRef<boolean>(false);
 
   // ============================================
-  // ✅ 1. التمرير التلقائي عند فتح الفورم
+  // ✅ 1. Auto-scroll عند فتح الفورم
   // ============================================
   useEffect(() => {
     setTimeout(() => {
@@ -70,15 +69,12 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ 2. التمرير التلقائي عند اقتراب المؤشر من الحواف
+  // ✅ 2. Auto-scroll عند اقتراب المؤشر من الحواف
   // ============================================
 
-  /**
-   * حلقة التمرير المستمرة باستخدام requestAnimationFrame
-   * توفر تمريراً سلساً ومتحكماً به
-   */
   const startScrolling = useCallback(() => {
-    const container = scrollContainerRef.current;
+    // ✅ استخدم formRef للتمرير
+    const container = formRef.current;
     if (!container) {
       animationRef.current = null;
       isScrollingRef.current = false;
@@ -88,7 +84,6 @@ const PurchaseForm: React.FC<Props> = ({
     const maxScroll = container.scrollHeight - container.clientHeight;
     const speed = targetSpeedRef.current;
     
-    // ✅ توقف إذا كانت السرعة قريبة من الصفر أو وصلنا للنهاية
     if (Math.abs(speed) < 0.05 || maxScroll <= 0) {
       animationRef.current = null;
       isScrollingRef.current = false;
@@ -96,11 +91,9 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
-    // ✅ تطبيق التمرير مع التحقق من الحدود
     const currentScroll = container.scrollTop;
     let newScrollTop = currentScroll + speed;
     
-    // ✅ منع التجاوز (عدم التمرير فوق أو تحت المحتوى)
     if (newScrollTop < 0) {
       newScrollTop = 0;
       targetSpeedRef.current = 0;
@@ -111,7 +104,6 @@ const PurchaseForm: React.FC<Props> = ({
     
     container.scrollTop = newScrollTop;
     
-    // ✅ استمرار الحلقة فقط إذا كانت السرعة موجودة
     if (Math.abs(targetSpeedRef.current) > 0.05) {
       animationRef.current = requestAnimationFrame(startScrolling);
     } else {
@@ -121,21 +113,18 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, []);
 
-  /**
-   * معالج حركة الماوس - يحدد اتجاه وسرعة التمرير
-   */
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const container = scrollContainerRef.current;
+    // ✅ استخدم formRef للتمرير
+    const container = formRef.current;
     if (!container) return;
     
-    // ✅ الحصول على إحداثيات الماوس داخل الحاوية
     const rect = container.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
     const maxScroll = container.scrollHeight - container.clientHeight;
     
-    // ✅ للتصحيح - يمكن إزالة هذه السطور بعد التأكد من العمل
-    console.log('🖱️ Mouse Y:', mouseY, 'Height:', height, 'MaxScroll:', maxScroll);
+    // ✅ للتصحيح - سترى الآن MaxScroll > 0
+    console.log('🖱️ Mouse Y:', Math.round(mouseY), 'Height:', Math.round(height), 'MaxScroll:', Math.round(maxScroll));
     
     if (maxScroll <= 0) {
       targetSpeedRef.current = 0;
@@ -143,12 +132,10 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
-    // ✅ تحديد منطقة التأثير (30% من الحواف)
-    const edgeThreshold = 0.3; // 30%
+    const edgeThreshold = 0.3;
     const centerStart = height * edgeThreshold;
     const centerEnd = height * (1 - edgeThreshold);
     
-    // ✅ إذا كان المؤشر في المنتصف → لا تتحرك
     if (mouseY >= centerStart && mouseY <= centerEnd) {
       targetSpeedRef.current = 0;
       setScrollDirection('none');
@@ -160,26 +147,22 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
-    // ✅ حساب سرعة التمرير بناءً على قرب المؤشر من الحافة
     let speed = 0;
-    const maxSpeed = 8; // أقصى سرعة (بكسل لكل إطار)
+    const maxSpeed = 8;
     
     if (mouseY < centerStart) {
-      // ✅ المؤشر في الأعلى → تمرير لأعلى (سرعة سالبة)
-      const distanceFromTop = mouseY / centerStart; // 0 إلى 1
+      const distanceFromTop = mouseY / centerStart;
       speed = -(1 - distanceFromTop) * maxSpeed;
       setScrollDirection('up');
     } 
     else if (mouseY > centerEnd) {
-      // ✅ المؤشر في الأسفل → تمرير لأسفل (سرعة موجبة)
-      const distanceFromBottom = (mouseY - centerEnd) / (height - centerEnd); // 0 إلى 1
+      const distanceFromBottom = (mouseY - centerEnd) / (height - centerEnd);
       speed = distanceFromBottom * maxSpeed;
       setScrollDirection('down');
     }
     
     targetSpeedRef.current = speed;
     
-    // ✅ بدء حلقة التمرير (مرة واحدة فقط)
     if (!isScrollingRef.current && Math.abs(speed) > 0.05) {
       isScrollingRef.current = true;
       if (animationRef.current) {
@@ -189,17 +172,11 @@ const PurchaseForm: React.FC<Props> = ({
     }
   }, [startScrolling]);
 
-  /**
-   * عند دخول الماوس إلى الحاوية
-   */
   const handleMouseEnter = useCallback(() => {
     setIsHovering(true);
     console.log('🐭 Mouse entered container');
   }, []);
 
-  /**
-   * عند خروج الماوس من الحاوية - إيقاف التمرير
-   */
   const handleMouseLeave = useCallback(() => {
     setIsHovering(false);
     targetSpeedRef.current = 0;
@@ -212,7 +189,7 @@ const PurchaseForm: React.FC<Props> = ({
     console.log('🐭 Mouse left container');
   }, []);
 
-  // ✅ تنظيف عند فك تثبيت المكون
+  // ✅ تنظيف
   useEffect(() => {
     return () => {
       if (animationRef.current) {
@@ -224,7 +201,7 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ 3. باقي منطق الفورم (بدون تغيير)
+  // ✅ 3. باقي منطق الفورم
   // ============================================
 
   useEffect(() => {
@@ -373,14 +350,13 @@ const PurchaseForm: React.FC<Props> = ({
       onSubmit={handleSubmit} 
       className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
     >
-      {/* ✅ الحاوية التي تستقبل أحداث الماوس */}
+      {/* ✅ حاوية الماوس فقط */}
       <div 
-        ref={scrollContainerRef}
+        ref={mouseContainerRef}
         onMouseEnter={handleMouseEnter}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         className="relative"
-        style={{ minHeight: '400px' }} // ✅ تأكد من أن الحاوية لها ارتفاع كاف
       >
         {/* ✅ مؤشر حالة التمرير */}
         <div className={`absolute top-2 right-2 text-[10px] px-3 py-1.5 rounded-full border flex items-center gap-2 z-10 transition-all duration-300 ${getScrollColor()}`}>
@@ -641,7 +617,7 @@ const PurchaseForm: React.FC<Props> = ({
           </div>
         )}
 
-        {/* ✅ منطقة اختبار للتحقق من عمل الماوس */}
+        {/* ✅ منطقة اختبار */}
         <div className="mt-6 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-center">
           <p className="text-sm text-gray-600">
             🖱️ <span className="font-medium">حرك الماوس فوق هذه المنطقة</span>
