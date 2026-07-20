@@ -35,7 +35,6 @@ const PurchaseForm: React.FC<Props> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const isEditing = !!purchase;
 
-  // ✅ Refs
   const formRef = useRef<HTMLFormElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -61,45 +60,25 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ Auto-scroll عند تحريك الماوس داخل الفورم
+  // ✅ دوال التمرير التلقائي - الحل البديل
   // ============================================
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!scrollContainerRef.current) return;
-    
-    const container = scrollContainerRef.current;
-    const rect = container.getBoundingClientRect();
-    const mouseY = e.clientY - rect.top;
-    const height = rect.height;
-    
-    // ✅ حساب نسبة الماوس داخل الفورم (0 إلى 1)
-    const ratio = mouseY / height;
-    
-    // ✅ أقصى مسافة للتمرير
-    const maxScroll = container.scrollHeight - container.clientHeight;
-    
-    if (maxScroll <= 0) return;
-    
-    // ✅ تمرير بناءً على موقع الماوس
-    // الجزء العلوي (0-30%) → تمرير لأعلى
-    if (ratio < 0.3) {
-      const targetScroll = (ratio / 0.3) * maxScroll * 0.3;
-      container.scrollTop = targetScroll;
-    }
-    // الجزء السفلي (70-100%) → تمرير لأسفل
-    else if (ratio > 0.7) {
-      const targetScroll = maxScroll - ((1 - ratio) / 0.3) * maxScroll * 0.3;
-      container.scrollTop = Math.max(0, targetScroll);
-    }
-    // الجزء الأوسط (30-70%) → تمرير متوسط
-    else {
-      const targetScroll = (ratio - 0.3) / 0.4 * maxScroll;
-      container.scrollTop = Math.max(0, Math.min(targetScroll, maxScroll));
+  const scrollUp = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        top: -100,
+        behavior: 'smooth'
+      });
     }
   };
 
-  const handleMouseLeave = () => {
-    // ✅ لا تفعل شيئاً عند مغادرة الماوس
+  const scrollDown = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({
+        top: 100,
+        behavior: 'smooth'
+      });
+    }
   };
 
   // ============================================
@@ -262,14 +241,32 @@ const PurchaseForm: React.FC<Props> = ({
     >
       <div 
         ref={scrollContainerRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
         className="relative"
       >
+        {/* ✅ أزرار التمرير التلقائي */}
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
+          <button
+            type="button"
+            onMouseEnter={scrollUp}
+            className="w-8 h-8 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center text-sm"
+            title="تمرير لأعلى"
+          >
+            <i className="fas fa-chevron-up"></i>
+          </button>
+          <button
+            type="button"
+            onMouseEnter={scrollDown}
+            className="w-8 h-8 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center text-sm"
+            title="تمرير لأسفل"
+          >
+            <i className="fas fa-chevron-down"></i>
+          </button>
+        </div>
+
         {/* ✅ مؤشر التمرير التلقائي */}
-        <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-600 text-[10px] px-2 py-1 rounded-full border border-blue-200/50 flex items-center gap-1.5">
+        <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-600 text-[10px] px-2 py-1 rounded-full border border-blue-200/50 flex items-center gap-1.5 z-10">
           <i className="fas fa-mouse-pointer text-[10px]"></i>
-          <span>حرك الماوس للتمرير</span>
+          <span>مرر الماوس على الأسهم</span>
         </div>
 
         <div className="flex justify-between items-center mb-6 border-b pb-3">
@@ -510,7 +507,6 @@ const PurchaseForm: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* عرض عدد الأخطاء */}
         {Object.keys(errors).length > 0 && (
           <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-red-700 text-sm flex items-center gap-2">
