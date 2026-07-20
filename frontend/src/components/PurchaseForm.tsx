@@ -1,5 +1,5 @@
 // frontend/src/components/PurchaseForm.tsx
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { Purchase } from '../types/purchase.types';
 
 interface Props {
@@ -41,6 +41,11 @@ const PurchaseForm: React.FC<Props> = ({
 
   // ✅ حالة التمرير
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
+  
+  // ✅ متغيرات التمرير المحسّنة
+  const animationRef = useRef<number | null>(null);
+  const targetSpeedRef = useRef<number>(0);
+  const isScrollingRef = useRef<boolean>(false);
 
   // ============================================
   // ✅ Auto-scroll عند فتح الفورم
@@ -63,10 +68,54 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ Auto-scroll عند اقتراب المؤشر من الحواف
+  // ✅ Auto-scroll عند اقتراب المؤشر من الحواف (محسّن)
   // ============================================
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const startScrolling = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) {
+      animationRef.current = null;
+      isScrollingRef.current = false;
+      return;
+    }
+    
+    const maxScroll = container.scrollHeight - container.clientHeight;
+    const speed = targetSpeedRef.current;
+    
+    // ✅ توقف إذا كانت السرعة قريبة من الصفر أو وصلنا للنهاية
+    if (Math.abs(speed) < 0.05 || maxScroll <= 0) {
+      animationRef.current = null;
+      isScrollingRef.current = false;
+      setScrollDirection('none');
+      return;
+    }
+    
+    // ✅ تطبيق التمرير مع التحقق من الحدود
+    const currentScroll = container.scrollTop;
+    let newScrollTop = currentScroll + speed;
+    
+    // ✅ منع التجاوز
+    if (newScrollTop < 0) {
+      newScrollTop = 0;
+      targetSpeedRef.current = 0;
+    } else if (newScrollTop > maxScroll) {
+      newScrollTop = maxScroll;
+      targetSpeedRef.current = 0;
+    }
+    
+    container.scrollTop = newScrollTop;
+    
+    // ✅ استمرار الحلقة فقط إذا كانت السرعة موجودة
+    if (Math.abs(targetSpeedRef.current) > 0.05) {
+      animationRef.current = requestAnimationFrame(startScrolling);
+    } else {
+      animationRef.current = null;
+      isScrollingRef.current = false;
+      setScrollDirection('none');
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!scrollContainerRef.current) return;
     
     const container = scrollContainerRef.current;
@@ -75,7 +124,11 @@ const PurchaseForm: React.FC<Props> = ({
     const height = rect.height;
     const maxScroll = container.scrollHeight - container.clientHeight;
     
-    if (maxScroll <= 0) return;
+    if (maxScroll <= 0) {
+      targetSpeedRef.current = 0;
+      setScrollDirection('none');
+      return;
+    }
     
     // ✅ تحديد منطقة التأثير (30% من الحواف)
     const edgeThreshold = 0.3; // 30%
@@ -84,38 +137,65 @@ const PurchaseForm: React.FC<Props> = ({
     
     // ✅ إذا كان المؤشر في المنتصف → لا تتحرك
     if (mouseY >= centerStart && mouseY <= centerEnd) {
+      targetSpeedRef.current = 0;
       setScrollDirection('none');
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+        isScrollingRef.current = false;
+      }
       return;
     }
     
     // ✅ حساب سرعة التمرير بناءً على قرب المؤشر من الحافة
     let speed = 0;
+    const maxSpeed = 6; // أقصى سرعة
     
     if (mouseY < centerStart) {
-      // ✅ المؤشر في الأعلى → تمرير لأعلى
+      // ✅ المؤشر في الأعلى → تمرير لأعلى (سرعة سالبة)
       const distanceFromTop = mouseY / centerStart; // 0 إلى 1
-      speed = (1 - distanceFromTop) * 5; // 0 إلى 5
+      speed = -(1 - distanceFromTop) * maxSpeed;
       setScrollDirection('up');
-      
-      // ✅ تطبيق التمرير لأعلى
-      const newScrollTop = Math.max(0, container.scrollTop - speed);
-      container.scrollTop = newScrollTop;
     } 
     else if (mouseY > centerEnd) {
-      // ✅ المؤشر في الأسفل → تمرير لأسفل
+      // ✅ المؤشر في الأسفل → تمرير لأسفل (سرعة موجبة)
       const distanceFromBottom = (mouseY - centerEnd) / (height - centerEnd); // 0 إلى 1
-      speed = distanceFromBottom * 5; // 0 إلى 5
+      speed = distanceFromBottom * maxSpeed;
       setScrollDirection('down');
-      
-      // ✅ تطبيق التمرير لأسفل
-      const newScrollTop = Math.min(maxScroll, container.scrollTop + speed);
-      container.scrollTop = newScrollTop;
     }
-  };
+    
+    targetSpeedRef.current = speed;
+    
+    // ✅ بدء حلقة التمرير (مرة واحدة فقط)
+    if (!isScrollingRef.current && Math.abs(speed) > 0.05) {
+      isScrollingRef.current = true;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+      animationRef.current = requestAnimationFrame(startScrolling);
+    }
+  }, [startScrolling]);
 
-  const handleMouseLeave = () => {
+  const handleMouseLeave = useCallback(() => {
+    targetSpeedRef.current = 0;
     setScrollDirection('none');
-  };
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+      isScrollingRef.current = false;
+    }
+  }, []);
+
+  // ✅ تنظيف عند فك التثبيت
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+        isScrollingRef.current = false;
+      }
+    };
+  }, []);
 
   // ============================================
   // ✅ تحديث الفورم عند تغيير nextRequestNumber
@@ -270,14 +350,14 @@ const PurchaseForm: React.FC<Props> = ({
   // ============================================
 
   const getScrollIcon = () => {
-    if (scrollDirection === 'up') return 'fa-chevron-up';
-    if (scrollDirection === 'down') return 'fa-chevron-down';
-    return 'fa-arrows-alt-v';
+    if (scrollDirection === 'up') return '↑';
+    if (scrollDirection === 'down') return '↓';
+    return '•';
   };
 
   const getScrollColor = () => {
-    if (scrollDirection === 'up') return 'text-green-500 border-green-300 bg-green-50';
-    if (scrollDirection === 'down') return 'text-blue-500 border-blue-300 bg-blue-50';
+    if (scrollDirection === 'up') return 'text-green-600 border-green-300 bg-green-50';
+    if (scrollDirection === 'down') return 'text-blue-600 border-blue-300 bg-blue-50';
     return 'text-gray-400 border-gray-200 bg-gray-50';
   };
 
@@ -305,7 +385,7 @@ const PurchaseForm: React.FC<Props> = ({
       >
         {/* ✅ مؤشر حالة التمرير */}
         <div className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 z-10 transition-all duration-300 ${getScrollColor()}`}>
-          <i className={`fas ${getScrollIcon()} text-[10px]`}></i>
+          <span className="text-sm font-bold">{getScrollIcon()}</span>
           <span>{getScrollText()}</span>
         </div>
 
