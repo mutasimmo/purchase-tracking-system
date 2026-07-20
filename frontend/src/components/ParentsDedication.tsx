@@ -6,7 +6,26 @@ interface Props {
 }
 
 const ParentsDedication: React.FC<Props> = ({ onClose }) => {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // ✅ التحقق من ظهور الدعاء اليوم
+  useEffect(() => {
+    const checkAndShowDedication = () => {
+      const today = new Date().toDateString();
+      const lastShown = localStorage.getItem('parentsDedicationLastShown');
+
+      // ✅ إذا لم يظهر اليوم، أظهره
+      if (lastShown !== today) {
+        setIsVisible(true);
+        // ✅ حفظ تاريخ اليوم
+        localStorage.setItem('parentsDedicationLastShown', today);
+      }
+    };
+
+    // ✅ تأخير بسيط للتأكد من تحميل الصفحة
+    const timer = setTimeout(checkAndShowDedication, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ✅ منع التمرير خلف المودال
   useEffect(() => {
