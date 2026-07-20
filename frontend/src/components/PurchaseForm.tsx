@@ -38,10 +38,7 @@ const PurchaseForm: React.FC<Props> = ({
   // ✅ Refs
   const formRef = useRef<HTMLFormElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // ✅ حالة للتمرير التلقائي
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // ============================================
   // ✅ Auto-scroll عند فتح الفورم
@@ -64,56 +61,45 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ Auto-scroll عند تمرير الماوس داخل الفورم
+  // ✅ Auto-scroll عند تحريك الماوس داخل الفورم
   // ============================================
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current) return;
+    if (!scrollContainerRef.current) return;
     
-    const container = containerRef.current;
+    const container = scrollContainerRef.current;
     const rect = container.getBoundingClientRect();
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
     
-    // ✅ نسبة الماوس داخل الفورم (0 إلى 1)
+    // ✅ حساب نسبة الماوس داخل الفورم (0 إلى 1)
     const ratio = mouseY / height;
     
-    // ✅ حساب التمرير بناءً على موقع الماوس
-    const scrollHeight = container.scrollHeight - container.clientHeight;
+    // ✅ أقصى مسافة للتمرير
+    const maxScroll = container.scrollHeight - container.clientHeight;
     
-    if (scrollHeight > 0) {
-      // ✅ إذا كان الماوس في الثلث العلوي → تمرير لأعلى
-      if (ratio < 0.3) {
-        const targetScroll = (ratio / 0.3) * scrollHeight * 0.5;
-        container.scrollTo({
-          top: targetScroll,
-          behavior: 'smooth'
-        });
-        setIsAutoScrolling(true);
-      }
-      // ✅ إذا كان الماوس في الثلث السفلي → تمرير لأسفل
-      else if (ratio > 0.7) {
-        const targetScroll = scrollHeight - ((1 - ratio) / 0.3) * scrollHeight * 0.5;
-        container.scrollTo({
-          top: Math.max(0, targetScroll),
-          behavior: 'smooth'
-        });
-        setIsAutoScrolling(true);
-      }
-      // ✅ إذا كان الماوس في المنتصف → تمرير إلى المنتصف
-      else {
-        const targetScroll = (ratio - 0.3) / 0.4 * scrollHeight;
-        container.scrollTo({
-          top: Math.max(0, Math.min(targetScroll, scrollHeight)),
-          behavior: 'smooth'
-        });
-        setIsAutoScrolling(true);
-      }
+    if (maxScroll <= 0) return;
+    
+    // ✅ تمرير بناءً على موقع الماوس
+    // الجزء العلوي (0-30%) → تمرير لأعلى
+    if (ratio < 0.3) {
+      const targetScroll = (ratio / 0.3) * maxScroll * 0.3;
+      container.scrollTop = targetScroll;
+    }
+    // الجزء السفلي (70-100%) → تمرير لأسفل
+    else if (ratio > 0.7) {
+      const targetScroll = maxScroll - ((1 - ratio) / 0.3) * maxScroll * 0.3;
+      container.scrollTop = Math.max(0, targetScroll);
+    }
+    // الجزء الأوسط (30-70%) → تمرير متوسط
+    else {
+      const targetScroll = (ratio - 0.3) / 0.4 * maxScroll;
+      container.scrollTop = Math.max(0, Math.min(targetScroll, maxScroll));
     }
   };
 
   const handleMouseLeave = () => {
-    setIsAutoScrolling(false);
+    // ✅ لا تفعل شيئاً عند مغادرة الماوس
   };
 
   // ============================================
@@ -275,11 +261,17 @@ const PurchaseForm: React.FC<Props> = ({
       className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
     >
       <div 
-        ref={containerRef}
+        ref={scrollContainerRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         className="relative"
       >
+        {/* ✅ مؤشر التمرير التلقائي */}
+        <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-600 text-[10px] px-2 py-1 rounded-full border border-blue-200/50 flex items-center gap-1.5">
+          <i className="fas fa-mouse-pointer text-[10px]"></i>
+          <span>حرك الماوس للتمرير</span>
+        </div>
+
         <div className="flex justify-between items-center mb-6 border-b pb-3">
           <h2 className="text-2xl font-bold text-gray-800">
             {isEditing ? '✏️ تعديل طلب' : '➕ إضافة طلب جديد'}
@@ -295,14 +287,6 @@ const PurchaseForm: React.FC<Props> = ({
             </button>
           )}
         </div>
-
-        {/* ✅ مؤشر التمرير التلقائي */}
-        {isAutoScrolling && (
-          <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
-            <i className="fas fa-mouse-pointer ml-1"></i>
-            تمرير تلقائي
-          </div>
-        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* رقم الطلب */}
