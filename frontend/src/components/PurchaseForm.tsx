@@ -40,7 +40,7 @@ const PurchaseForm: React.FC<Props> = ({
   const firstInputRef = useRef<HTMLInputElement>(null);
   const mouseContainerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ حالة التمرير
+  // ✅ حالة التمرير (للاستخدام الداخلي فقط)
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
   const [isHovering, setIsHovering] = useState(false);
   
@@ -312,7 +312,7 @@ const PurchaseForm: React.FC<Props> = ({
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
 
   // ============================================
-  // ✅ 4. دوال مساعدة لعرض حالة التمرير (بدون نص)
+  // ✅ 4. دوال مساعدة لعرض حالة التمرير (احتفظنا بها للاستخدام الداخلي)
   // ============================================
 
   const getScrollIcon = () => {
@@ -327,6 +327,12 @@ const PurchaseForm: React.FC<Props> = ({
     return isHovering ? 'text-gray-600 border-gray-300 bg-gray-50' : 'text-gray-400 border-gray-200 bg-gray-50';
   };
 
+  const getScrollText = () => {
+    if (scrollDirection === 'up') return 'تمرير لأعلى ⬆️';
+    if (scrollDirection === 'down') return 'تمرير لأسفل ⬇️';
+    return isHovering ? 'حرك الماوس للحواف' : 'مرر فوق المحتوى';
+  };
+
   // ============================================
   // ✅ 5. Render
   // ============================================
@@ -337,7 +343,7 @@ const PurchaseForm: React.FC<Props> = ({
       onSubmit={handleSubmit} 
       className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
     >
-      {/* ✅ حاوية الماوس فقط */}
+      {/* ✅ حاوية الماوس - بدون أي مؤشرات ظاهرة */}
       <div 
         ref={mouseContainerRef}
         onMouseEnter={handleMouseEnter}
@@ -345,13 +351,7 @@ const PurchaseForm: React.FC<Props> = ({
         onMouseLeave={handleMouseLeave}
         className="relative"
       >
-        {/* ✅ مؤشر حالة التمرير - أيقونة فقط */}
-        <div className={`absolute top-2 right-2 text-base px-2 py-1 rounded-full border flex items-center gap-1 z-10 transition-all duration-300 ${getScrollColor()}`}>
-          <span>{getScrollIcon()}</span>
-          {isHovering && (
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          )}
-        </div>
+        {/* ❌ تم إزالة المؤشر الظاهر بالكامل */}
 
         {/* ✅ رأس الفورم */}
         <div className="flex justify-between items-center mb-6 border-b pb-3">
@@ -602,21 +602,6 @@ const PurchaseForm: React.FC<Props> = ({
             </p>
           </div>
         )}
-
-        {/* ✅ منطقة اختبار */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-center">
-          <p className="text-sm text-gray-600">
-            🖱️ <span className="font-medium">حرك الماوس فوق هذه المنطقة</span>
-          </p>
-          <p className="text-xs text-gray-400 mt-1">
-            الحواف العلوية والسفلية (30%) ← تفعّل التمرير • المنتصف (40%) ← لا يتحرك
-          </p>
-          <div className="mt-2 flex justify-center gap-4 text-xs">
-            <span className="text-green-600">⬆️ أعلى</span>
-            <span className="text-gray-400">⬛ منتصف</span>
-            <span className="text-blue-600">⬇️ أسفل</span>
-          </div>
-        </div>
       </div>
     </form>
   );
