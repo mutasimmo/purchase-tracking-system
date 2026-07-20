@@ -39,8 +39,8 @@ const PurchaseForm: React.FC<Props> = ({
   const firstInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // ✅ حالة للتمرير التلقائي
-  const [isHovering, setIsHovering] = useState(false);
+  // ✅ حالة التمرير
+  const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
 
   // ============================================
   // ✅ Auto-scroll عند فتح الفورم
@@ -63,7 +63,7 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ Auto-scroll عند تحريك الماوس - النسخة الصحيحة
+  // ✅ Auto-scroll عند اقتراب المؤشر من الحواف
   // ============================================
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -71,34 +71,50 @@ const PurchaseForm: React.FC<Props> = ({
     
     const container = scrollContainerRef.current;
     const rect = container.getBoundingClientRect();
-    
-    // ✅ موقع الماوس داخل الفورم
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
-    
-    // ✅ نسبة الماوس (0 = أعلى, 1 = أسفل)
-    const ratio = mouseY / height;
-    
-    // ✅ أقصى مسافة للتمرير
     const maxScroll = container.scrollHeight - container.clientHeight;
     
     if (maxScroll <= 0) return;
     
-    // ✅ حساب موضع التمرير بناءً على نسبة الماوس
-    // ratio = 0 → أعلى الصفحة (scrollTop = 0)
-    // ratio = 1 → أسفل الصفحة (scrollTop = maxScroll)
-    const targetScroll = ratio * maxScroll;
+    // ✅ تحديد منطقة التأثير (30% من الحواف)
+    const edgeThreshold = 0.3; // 30%
+    const centerStart = height * edgeThreshold;
+    const centerEnd = height * (1 - edgeThreshold);
     
-    // ✅ تطبيق التمرير
-    container.scrollTop = targetScroll;
-  };
-
-  const handleMouseEnter = () => {
-    setIsHovering(true);
+    // ✅ إذا كان المؤشر في المنتصف → لا تتحرك
+    if (mouseY >= centerStart && mouseY <= centerEnd) {
+      setScrollDirection('none');
+      return;
+    }
+    
+    // ✅ حساب سرعة التمرير بناءً على قرب المؤشر من الحافة
+    let speed = 0;
+    
+    if (mouseY < centerStart) {
+      // ✅ المؤشر في الأعلى → تمرير لأعلى
+      const distanceFromTop = mouseY / centerStart; // 0 إلى 1
+      speed = (1 - distanceFromTop) * 5; // 0 إلى 5
+      setScrollDirection('up');
+      
+      // ✅ تطبيق التمرير لأعلى
+      const newScrollTop = Math.max(0, container.scrollTop - speed);
+      container.scrollTop = newScrollTop;
+    } 
+    else if (mouseY > centerEnd) {
+      // ✅ المؤشر في الأسفل → تمرير لأسفل
+      const distanceFromBottom = (mouseY - centerEnd) / (height - centerEnd); // 0 إلى 1
+      speed = distanceFromBottom * 5; // 0 إلى 5
+      setScrollDirection('down');
+      
+      // ✅ تطبيق التمرير لأسفل
+      const newScrollTop = Math.min(maxScroll, container.scrollTop + speed);
+      container.scrollTop = newScrollTop;
+    }
   };
 
   const handleMouseLeave = () => {
-    setIsHovering(false);
+    setScrollDirection('none');
   };
 
   // ============================================
@@ -250,6 +266,28 @@ const PurchaseForm: React.FC<Props> = ({
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
 
   // ============================================
+  // ✅ تحديد اتجاه التمرير
+  // ============================================
+
+  const getScrollIcon = () => {
+    if (scrollDirection === 'up') return 'fa-chevron-up';
+    if (scrollDirection === 'down') return 'fa-chevron-down';
+    return 'fa-arrows-alt-v';
+  };
+
+  const getScrollColor = () => {
+    if (scrollDirection === 'up') return 'text-green-500 border-green-300 bg-green-50';
+    if (scrollDirection === 'down') return 'text-blue-500 border-blue-300 bg-blue-50';
+    return 'text-gray-400 border-gray-200 bg-gray-50';
+  };
+
+  const getScrollText = () => {
+    if (scrollDirection === 'up') return '⬆️ تمرير لأعلى';
+    if (scrollDirection === 'down') return '⬇️ تمرير لأسفل';
+    return '🖱️ حرك الماوس للحواف';
+  };
+
+  // ============================================
   // ✅ Render
   // ============================================
 
@@ -262,18 +300,13 @@ const PurchaseForm: React.FC<Props> = ({
       <div 
         ref={scrollContainerRef}
         onMouseMove={handleMouseMove}
-        onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className="relative"
       >
-        {/* ✅ مؤشر التمرير التلقائي */}
-        <div className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 z-10 transition-all duration-300 ${
-          isHovering 
-            ? 'bg-green-500/20 text-green-600 border-green-300' 
-            : 'bg-blue-500/10 text-blue-600 border-blue-200/50'
-        }`}>
-          <i className={`fas ${isHovering ? 'fa-check-circle' : 'fa-mouse-pointer'} text-[10px]`}></i>
-          <span>{isHovering ? '✅ التمرير التلقائي مفعل' : 'حرك الماوس للتمرير التلقائي'}</span>
+        {/* ✅ مؤشر حالة التمرير */}
+        <div className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 z-10 transition-all duration-300 ${getScrollColor()}`}>
+          <i className={`fas ${getScrollIcon()} text-[10px]`}></i>
+          <span>{getScrollText()}</span>
         </div>
 
         <div className="flex justify-between items-center mb-6 border-b pb-3">
