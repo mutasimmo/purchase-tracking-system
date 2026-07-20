@@ -51,6 +51,10 @@ const AppContent = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // ✅ حالة تتبع الماوس للفورم
+  const [formPosition, setFormPosition] = useState({ x: 100, y: 100 });
+  const [isFormDragging, setIsFormDragging] = useState(false);
+
   // ✅ State للتحكم في ظهور رسالة الدعوة
   const [showDedication, setShowDedication] = useState(false);
 
@@ -64,6 +68,31 @@ const AppContent = () => {
   const handleCloseDedication = () => {
     setShowDedication(false);
   };
+
+  // ✅ معالج حركة الماوس لتتبع الفورم
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (isFormDragging) {
+      // ✅ حساب الموضع مع حدود الشاشة
+      const formWidth = 600;
+      const formHeight = 500;
+      const offsetX = 280;
+      const offsetY = 200;
+      
+      setFormPosition({
+        x: Math.max(10, Math.min(e.clientX - offsetX, window.innerWidth - formWidth - 10)),
+        y: Math.max(10, Math.min(e.clientY - offsetY, window.innerHeight - formHeight - 10))
+      });
+    }
+  }, [isFormDragging]);
+
+  useEffect(() => {
+    if (isFormDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+    } else {
+      document.removeEventListener('mousemove', handleMouseMove);
+    }
+    return () => document.removeEventListener('mousemove', handleMouseMove);
+  }, [isFormDragging, handleMouseMove]);
 
   // ============================================
   // ✅ دوال مساعدة
@@ -217,6 +246,7 @@ const AppContent = () => {
     }
     setEditingPurchase(null);
     setShowForm(true);
+    setIsFormDragging(true);
   }, [user]);
 
   const handleEdit = useCallback((purchase: Purchase) => {
@@ -227,6 +257,7 @@ const AppContent = () => {
     }
     setEditingPurchase(purchase);
     setShowForm(true);
+    setIsFormDragging(true);
   }, [user]);
 
   const handleDeleteClick = useCallback((id: number) => {
@@ -237,6 +268,12 @@ const AppContent = () => {
     setDeleteId(id);
     setShowDeleteModal(true);
   }, [isUserAdmin]);
+
+  const handleCancelForm = () => {
+    setShowForm(false);
+    setEditingPurchase(null);
+    setIsFormDragging(false);
+  };
 
   const confirmDelete = useCallback(async () => {
     if (!deleteId) return;
@@ -270,6 +307,7 @@ const AppContent = () => {
       }
       setShowForm(false);
       setEditingPurchase(null);
+      setIsFormDragging(false);
       await refreshPurchases();
     } catch (err) {
       toast.error('❌ حدث خطأ في حفظ الطلب');
@@ -493,17 +531,28 @@ const AppContent = () => {
           itemsPerPage={10}
         />
 
-        {/* MODALS */}
+        {/* ✅ فورم إضافة/تعديل الطلب - يتبع حركة الماوس */}
         {showForm && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
-            <div className="bg-white rounded-2xl md:rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div 
+            className="fixed z-50 pointer-events-none"
+            style={{
+              left: formPosition.x,
+              top: formPosition.y,
+              width: '600px',
+              maxWidth: '90vw',
+              maxHeight: '90vh'
+            }}
+          >
+            <div className="pointer-events-auto shadow-2xl rounded-2xl bg-white">
               <PurchaseForm
                 purchase={editingPurchase}
                 onSubmit={handleSubmit}
-                onCancel={() => {
-                  setShowForm(false);
-                  setEditingPurchase(null);
-                }}
+                onCancel={handleCancelForm}
+                onDelete={editingPurchase ? () => {
+                  if (window.confirm('هل أنت متأكد من حذف هذا الطلب؟')) {
+                    // منطق الحذف
+                  }
+                } : undefined}
                 loading={formLoading}
                 nextRequestNumber={!editingPurchase ? nextRequestNumber : undefined}
               />
@@ -511,6 +560,7 @@ const AppContent = () => {
           </div>
         )}
 
+        {/* MODALS */}
         {showDeleteModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50 fade-in-up">
             <div className="bg-white rounded-2xl md:rounded-3xl max-w-md w-full p-4 sm:p-6 md:p-8 shadow-2xl">
