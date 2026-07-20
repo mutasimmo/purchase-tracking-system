@@ -35,16 +35,19 @@ const PurchaseForm: React.FC<Props> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const isEditing = !!purchase;
 
-  // ✅ Refs للتمرير والتركيز
+  // ✅ Refs
   const formRef = useRef<HTMLFormElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // ✅ حالة للتمرير التلقائي
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
 
   // ============================================
-  // ✅ Auto-scroll و Focus عند فتح الفورم
+  // ✅ Auto-scroll عند فتح الفورم
   // ============================================
 
   useEffect(() => {
-    // ✅ تمرير تلقائي إلى الفورم
     setTimeout(() => {
       if (formRef.current) {
         formRef.current.scrollIntoView({
@@ -52,8 +55,6 @@ const PurchaseForm: React.FC<Props> = ({
           block: 'center'
         });
       }
-      
-      // ✅ التركيز على أول حقل (رقم الطلب)
       setTimeout(() => {
         if (firstInputRef.current) {
           firstInputRef.current.focus();
@@ -61,6 +62,59 @@ const PurchaseForm: React.FC<Props> = ({
       }, 300);
     }, 150);
   }, []);
+
+  // ============================================
+  // ✅ Auto-scroll عند تمرير الماوس داخل الفورم
+  // ============================================
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    
+    const container = containerRef.current;
+    const rect = container.getBoundingClientRect();
+    const mouseY = e.clientY - rect.top;
+    const height = rect.height;
+    
+    // ✅ نسبة الماوس داخل الفورم (0 إلى 1)
+    const ratio = mouseY / height;
+    
+    // ✅ حساب التمرير بناءً على موقع الماوس
+    const scrollHeight = container.scrollHeight - container.clientHeight;
+    
+    if (scrollHeight > 0) {
+      // ✅ إذا كان الماوس في الثلث العلوي → تمرير لأعلى
+      if (ratio < 0.3) {
+        const targetScroll = (ratio / 0.3) * scrollHeight * 0.5;
+        container.scrollTo({
+          top: targetScroll,
+          behavior: 'smooth'
+        });
+        setIsAutoScrolling(true);
+      }
+      // ✅ إذا كان الماوس في الثلث السفلي → تمرير لأسفل
+      else if (ratio > 0.7) {
+        const targetScroll = scrollHeight - ((1 - ratio) / 0.3) * scrollHeight * 0.5;
+        container.scrollTo({
+          top: Math.max(0, targetScroll),
+          behavior: 'smooth'
+        });
+        setIsAutoScrolling(true);
+      }
+      // ✅ إذا كان الماوس في المنتصف → تمرير إلى المنتصف
+      else {
+        const targetScroll = (ratio - 0.3) / 0.4 * scrollHeight;
+        container.scrollTo({
+          top: Math.max(0, Math.min(targetScroll, scrollHeight)),
+          behavior: 'smooth'
+        });
+        setIsAutoScrolling(true);
+      }
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setIsAutoScrolling(false);
+  };
 
   // ============================================
   // ✅ تحديث الفورم عند تغيير nextRequestNumber
@@ -220,253 +274,268 @@ const PurchaseForm: React.FC<Props> = ({
       onSubmit={handleSubmit} 
       className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
     >
-      <div className="flex justify-between items-center mb-6 border-b pb-3">
-        <h2 className="text-2xl font-bold text-gray-800">
-          {isEditing ? '✏️ تعديل طلب' : '➕ إضافة طلب جديد'}
-        </h2>
-        {isEditing && (
+      <div 
+        ref={containerRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        className="relative"
+      >
+        <div className="flex justify-between items-center mb-6 border-b pb-3">
+          <h2 className="text-2xl font-bold text-gray-800">
+            {isEditing ? '✏️ تعديل طلب' : '➕ إضافة طلب جديد'}
+          </h2>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-red-600 hover:text-red-800 transition-colors"
+              title="حذف الطلب"
+            >
+              <i className="fas fa-trash-alt text-xl"></i>
+            </button>
+          )}
+        </div>
+
+        {/* ✅ مؤشر التمرير التلقائي */}
+        {isAutoScrolling && (
+          <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+            <i className="fas fa-mouse-pointer ml-1"></i>
+            تمرير تلقائي
+          </div>
+        )}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* رقم الطلب */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              رقم الطلب <span className="text-red-500">*</span>
+            </label>
+            <input
+              ref={firstInputRef}
+              type="text"
+              name="request_number"
+              value={formData.request_number}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.request_number && touched.request_number ? 'border-red-500' : 
+                isEditing ? 'border-gray-300' : 'border-green-400 bg-green-50'
+              }`}
+              required
+              readOnly={!isEditing}
+              placeholder={isEditing ? '' : 'سيتم توليده تلقائياً'}
+            />
+            {!isEditing && (
+              <p className="text-xs text-green-600 mt-1">✅ سيتم إنشاء رقم تلقائي</p>
+            )}
+            {errors.request_number && touched.request_number && (
+              <p className="text-red-500 text-xs mt-1">{errors.request_number}</p>
+            )}
+          </div>
+          
+          {/* التاريخ */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              التاريخ <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.date && touched.date ? 'border-red-500' : 'border-gray-300'
+              }`}
+              required
+            />
+            {errors.date && touched.date && (
+              <p className="text-red-500 text-xs mt-1">{errors.date}</p>
+            )}
+          </div>
+          
+          {/* الجهة الطالبة */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              الجهة الطالبة <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="requester"
+              value={formData.requester}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.requester && touched.requester ? 'border-red-500' : 'border-gray-300'
+              }`}
+              required
+              placeholder="اسم الجهة أو القسم"
+            />
+            {errors.requester && touched.requester && (
+              <p className="text-red-500 text-xs mt-1">{errors.requester}</p>
+            )}
+          </div>
+          
+          {/* صاحب الفاتورة */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              🧾 صاحب الفاتورة
+            </label>
+            <input
+              type="text"
+              name="invoice_owner"
+              value={formData.invoice_owner}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="اسم صاحب الفاتورة (اختياري)"
+            />
+            <p className="text-xs text-gray-400 mt-1">اختياري - يمكن تركه فارغاً</p>
+          </div>
+          
+          {/* المستلم */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              المستلم <span className="text-gray-400">(اختياري)</span>
+            </label>
+            <input
+              type="text"
+              name="receiver"
+              value={formData.receiver}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.receiver && touched.receiver ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="اسم المستلم (سيتم تعيين قيمة افتراضية)"
+            />
+            {errors.receiver && touched.receiver && (
+              <p className="text-red-500 text-xs mt-1">{errors.receiver}</p>
+            )}
+            {!errors.receiver && (
+              <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين "غير محدد" تلقائياً إذا تركت فارغاً</p>
+            )}
+          </div>
+          
+          {/* وصف الطلب */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              وصف الطلب <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.description && touched.description ? 'border-red-500' : 'border-gray-300'
+              }`}
+              rows={3}
+              required
+              placeholder="تفاصيل الطلب..."
+            />
+            {errors.description && touched.description && (
+              <p className="text-red-500 text-xs mt-1">{errors.description}</p>
+            )}
+          </div>
+          
+          {/* تاريخ التسليم */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              تاريخ التسليم <span className="text-gray-400">(اختياري)</span>
+            </label>
+            <input
+              type="date"
+              name="delivery_date"
+              value={formData.delivery_date}
+              onChange={handleChange}
+              onBlur={handleBlur}
+              className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
+                errors.delivery_date && touched.delivery_date ? 'border-red-500' : 'border-gray-300'
+              }`}
+              placeholder="اختياري"
+            />
+            {errors.delivery_date && touched.delivery_date && (
+              <p className="text-red-500 text-xs mt-1">{errors.delivery_date}</p>
+            )}
+            {!errors.delivery_date && (
+              <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين تاريخ اليوم تلقائياً إذا تركت فارغاً</p>
+            )}
+          </div>
+          
+          {/* موقف التنفيذ */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              موقف التنفيذ
+            </label>
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              {statusOptions.map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* الملحوظات */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              📝 ملحوظات
+            </label>
+            <textarea
+              name="notes"
+              value={formData.notes}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={2}
+              placeholder="أي ملحوظات إضافية..."
+            />
+          </div>
+        </div>
+        
+        {/* الأزرار */}
+        <div className="mt-6 flex gap-3 justify-end border-t pt-4">
           <button
             type="button"
-            onClick={handleDelete}
-            className="text-red-600 hover:text-red-800 transition-colors"
-            title="حذف الطلب"
+            onClick={onCancel}
+            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            disabled={loading}
           >
-            <i className="fas fa-trash-alt text-xl"></i>
+            إلغاء
           </button>
+          <button
+            type="submit"
+            className={`px-6 py-2 rounded-lg transition-colors ${
+              loading || !isFormValid
+                ? 'bg-blue-300 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            } text-white`}
+            disabled={loading || !isFormValid}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <i className="fas fa-spinner fa-spin"></i>
+                جاري الحفظ...
+              </span>
+            ) : (
+              isEditing ? 'تحديث' : 'إضافة'
+            )}
+          </button>
+        </div>
+
+        {/* عرض عدد الأخطاء */}
+        {Object.keys(errors).length > 0 && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-700 text-sm flex items-center gap-2">
+              <i className="fas fa-exclamation-circle"></i>
+              يرجى تصحيح {Object.keys(errors).length} خطأ قبل الحفظ
+            </p>
+          </div>
         )}
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* رقم الطلب - مع ref للتركيز التلقائي */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            رقم الطلب <span className="text-red-500">*</span>
-          </label>
-          <input
-            ref={firstInputRef}
-            type="text"
-            name="request_number"
-            value={formData.request_number}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.request_number && touched.request_number ? 'border-red-500' : 
-              isEditing ? 'border-gray-300' : 'border-green-400 bg-green-50'
-            }`}
-            required
-            readOnly={!isEditing}
-            placeholder={isEditing ? '' : 'سيتم توليده تلقائياً'}
-          />
-          {!isEditing && (
-            <p className="text-xs text-green-600 mt-1">✅ سيتم إنشاء رقم تلقائي</p>
-          )}
-          {errors.request_number && touched.request_number && (
-            <p className="text-red-500 text-xs mt-1">{errors.request_number}</p>
-          )}
-        </div>
-        
-        {/* التاريخ */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            التاريخ <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="date"
-            name="date"
-            value={formData.date}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.date && touched.date ? 'border-red-500' : 'border-gray-300'
-            }`}
-            required
-          />
-          {errors.date && touched.date && (
-            <p className="text-red-500 text-xs mt-1">{errors.date}</p>
-          )}
-        </div>
-        
-        {/* الجهة الطالبة */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            الجهة الطالبة <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="requester"
-            value={formData.requester}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.requester && touched.requester ? 'border-red-500' : 'border-gray-300'
-            }`}
-            required
-            placeholder="اسم الجهة أو القسم"
-          />
-          {errors.requester && touched.requester && (
-            <p className="text-red-500 text-xs mt-1">{errors.requester}</p>
-          )}
-        </div>
-        
-        {/* صاحب الفاتورة */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            🧾 صاحب الفاتورة
-          </label>
-          <input
-            type="text"
-            name="invoice_owner"
-            value={formData.invoice_owner}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="اسم صاحب الفاتورة (اختياري)"
-          />
-          <p className="text-xs text-gray-400 mt-1">اختياري - يمكن تركه فارغاً</p>
-        </div>
-        
-        {/* المستلم */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            المستلم <span className="text-gray-400">(اختياري)</span>
-          </label>
-          <input
-            type="text"
-            name="receiver"
-            value={formData.receiver}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.receiver && touched.receiver ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="اسم المستلم (سيتم تعيين قيمة افتراضية)"
-          />
-          {errors.receiver && touched.receiver && (
-            <p className="text-red-500 text-xs mt-1">{errors.receiver}</p>
-          )}
-          {!errors.receiver && (
-            <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين "غير محدد" تلقائياً إذا تركت فارغاً</p>
-          )}
-        </div>
-        
-        {/* وصف الطلب */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            وصف الطلب <span className="text-red-500">*</span>
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.description && touched.description ? 'border-red-500' : 'border-gray-300'
-            }`}
-            rows={3}
-            required
-            placeholder="تفاصيل الطلب..."
-          />
-          {errors.description && touched.description && (
-            <p className="text-red-500 text-xs mt-1">{errors.description}</p>
-          )}
-        </div>
-        
-        {/* تاريخ التسليم */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            تاريخ التسليم <span className="text-gray-400">(اختياري)</span>
-          </label>
-          <input
-            type="date"
-            name="delivery_date"
-            value={formData.delivery_date}
-            onChange={handleChange}
-            onBlur={handleBlur}
-            className={`w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-              errors.delivery_date && touched.delivery_date ? 'border-red-500' : 'border-gray-300'
-            }`}
-            placeholder="اختياري"
-          />
-          {errors.delivery_date && touched.delivery_date && (
-            <p className="text-red-500 text-xs mt-1">{errors.delivery_date}</p>
-          )}
-          {!errors.delivery_date && (
-            <p className="text-xs text-gray-400 mt-1">💡 سيتم تعيين تاريخ اليوم تلقائياً إذا تركت فارغاً</p>
-          )}
-        </div>
-        
-        {/* موقف التنفيذ */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            موقف التنفيذ
-          </label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            {statusOptions.map(status => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* الملحوظات */}
-        <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            📝 ملحوظات
-          </label>
-          <textarea
-            name="notes"
-            value={formData.notes}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={2}
-            placeholder="أي ملحوظات إضافية..."
-          />
-        </div>
-      </div>
-      
-      {/* الأزرار */}
-      <div className="mt-6 flex gap-3 justify-end border-t pt-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-          disabled={loading}
-        >
-          إلغاء
-        </button>
-        <button
-          type="submit"
-          className={`px-6 py-2 rounded-lg transition-colors ${
-            loading || !isFormValid
-              ? 'bg-blue-300 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700'
-          } text-white`}
-          disabled={loading || !isFormValid}
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <i className="fas fa-spinner fa-spin"></i>
-              جاري الحفظ...
-            </span>
-          ) : (
-            isEditing ? 'تحديث' : 'إضافة'
-          )}
-        </button>
-      </div>
-
-      {/* عرض عدد الأخطاء */}
-      {Object.keys(errors).length > 0 && (
-        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-700 text-sm flex items-center gap-2">
-            <i className="fas fa-exclamation-circle"></i>
-            يرجى تصحيح {Object.keys(errors).length} خطأ قبل الحفظ
-          </p>
-        </div>
-      )}
     </form>
   );
 };
