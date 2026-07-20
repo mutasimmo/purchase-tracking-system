@@ -78,8 +78,47 @@ export const purchaseApi = {
   // ============================================
   
   getAll: async (filters?: PurchaseFilters): Promise<PurchaseResponse> => {
-    const response = await api.get<PurchaseResponse>('/purchases', { params: filters });
-    return response.data;
+    const response = await api.get('/purchases', { params: filters });
+    
+    console.log('📊 getAll Raw Response:', response.data);
+    
+    // ✅ التعامل مع التنسيقين المحتملين
+    if (response.data && typeof response.data === 'object') {
+      // ✅ التنسيق 1: { success: true, data: [], pagination: {} }
+      if ('data' in response.data && 'pagination' in response.data) {
+        return {
+          data: response.data.data || [],
+          pagination: response.data.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 }
+        };
+      }
+      
+      // ✅ التنسيق 2: { data: [], total: 10, page: 1, totalPages: 2 }
+      if ('data' in response.data && 'total' in response.data) {
+        return {
+          data: response.data.data || [],
+          pagination: {
+            page: response.data.page || 1,
+            limit: response.data.limit || 10,
+            total: response.data.total || 0,
+            totalPages: response.data.totalPages || 1
+          }
+        };
+      }
+    }
+    
+    // ✅ التنسيق 3: المصفوفة مباشرة
+    if (Array.isArray(response.data)) {
+      return {
+        data: response.data,
+        pagination: { page: 1, limit: 10, total: response.data.length, totalPages: 1 }
+      };
+    }
+    
+    // ✅ الحالة الافتراضية
+    return {
+      data: [],
+      pagination: { page: 1, limit: 10, total: 0, totalPages: 1 }
+    };
   },
   
   getById: async (id: number): Promise<Purchase> => {
@@ -168,12 +207,12 @@ export const purchaseApi = {
   
   getOverdue: async (): Promise<Purchase[]> => {
     const response = await api.get<Purchase[]>('/purchases/alerts/overdue');
-    return response.data;
+    return response.data || [];
   },
 
   getExpiringToday: async (): Promise<Purchase[]> => {
     const response = await api.get<Purchase[]>('/purchases/alerts/expiring-today');
-    return response.data;
+    return response.data || [];
   },
 
   getAlertStats: async (): Promise<any> => {
@@ -206,7 +245,7 @@ export const purchaseApi = {
 
   getDeleted: async (): Promise<Purchase[]> => {
     const response = await api.get<Purchase[]>('/purchases/trash');
-    return response.data;
+    return response.data || [];
   },
 
   // ============================================

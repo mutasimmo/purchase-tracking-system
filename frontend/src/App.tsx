@@ -6,7 +6,7 @@ import type { Purchase, PurchaseFilters, PurchaseStatus } from './types/purchase
 import { AuthProvider, useAuth } from './context/AuthContext';
 import PurchaseTable from './components/PurchaseTable';
 import PurchaseForm from './components/PurchaseForm';
-import Home from './components/Home'; // ✅ الآن يحتوي على Dashboard بداخله
+import Home from './components/Home';
 import Filters from './components/Filters';
 import Pagination from './components/Pagination';
 import Login from './components/Login';
@@ -16,7 +16,7 @@ import Alerts from './components/Alerts';
 import AlertBell from './components/AlertBell';
 import UserManagement from './components/UserManagement';
 import Chat from './components/Chat';
-import ParentsDedication from './components/ParentsDedication'; // ✅ إضافة
+import ParentsDedication from './components/ParentsDedication';
 import * as XLSX from 'xlsx';
 import toast, { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -51,10 +51,10 @@ const AppContent = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // ✅ State للتحكم في ظهور رسالة الدعوة - تظهر دائماً عند تسجيل الدخول
+  // ✅ State للتحكم في ظهور رسالة الدعوة
   const [showDedication, setShowDedication] = useState(false);
 
-  // ✅ عند تغيير المستخدم (تسجيل دخول جديد)، تظهر الرسالة
+  // ✅ عند تغيير المستخدم تظهر الرسالة
   useEffect(() => {
     if (user) {
       setShowDedication(true);
@@ -124,18 +124,23 @@ const AppContent = () => {
       if (filters.search) filterParams.search = filters.search;
       
       const response = await purchaseApi.getAll(filterParams);
-      setPurchases(response.data);
-      setTotal(response.total);
-      setTotalPages(response.totalPages);
-      setCurrentPage(response.page);
+      
+      console.log('📊 loadPurchases Response:', response);
+      console.log('📊 Pagination:', response.pagination);
+      
+      setPurchases(response.data || []);
+      setTotal(response.pagination?.total || 0);
+      setTotalPages(response.pagination?.totalPages || 1);
+      setCurrentPage(response.pagination?.page || 1);
       
       // ✅ تحديث الرقم التالي من جميع الطلبات
       const allResponse = await purchaseApi.getAll({
         page: 1,
         limit: 1000
       });
-      const nextNum = generateNextRequestNumber(allResponse.data);
+      const nextNum = generateNextRequestNumber(allResponse.data || []);
       setNextRequestNumber(nextNum);
+      
     } catch (err: any) {
       if (err.response?.status === 401) {
         toast.error('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
@@ -171,10 +176,11 @@ const AppContent = () => {
       if (filters.search) filterParams.search = filters.search;
       
       const response = await purchaseApi.getAll(filterParams);
-      setPurchases(response.data);
-      setTotal(response.total);
-      setTotalPages(response.totalPages);
-      setCurrentPage(response.page);
+      
+      setPurchases(response.data || []);
+      setTotal(response.pagination?.total || 0);
+      setTotalPages(response.pagination?.totalPages || 1);
+      setCurrentPage(response.pagination?.page || 1);
     } catch (error) {
       console.error('Error refreshing purchases:', error);
     }
@@ -200,10 +206,9 @@ const AppContent = () => {
   }, []);
 
   // ============================================
-  // ✅ دوال CRUD (✅ تم تعديلها للسماح لـ User)
+  // ✅ دوال CRUD
   // ============================================
 
-  // ✅ إضافة طلب - يسمح لـ Admin, Manager, User
   const handleAdd = useCallback(() => {
     const allowedRoles = ['admin', 'super_admin', 'manager', 'user'];
     if (!user || !allowedRoles.includes(user.role)) {
@@ -214,7 +219,6 @@ const AppContent = () => {
     setShowForm(true);
   }, [user]);
 
-  // ✅ تعديل طلب - يسمح لـ Admin, Manager فقط
   const handleEdit = useCallback((purchase: Purchase) => {
     const allowedRoles = ['admin', 'super_admin', 'manager'];
     if (!user || !allowedRoles.includes(user.role)) {
@@ -225,7 +229,6 @@ const AppContent = () => {
     setShowForm(true);
   }, [user]);
 
-  // ✅ حذف طلب - للأدمن فقط
   const handleDeleteClick = useCallback((id: number) => {
     if (!isUserAdmin) {
       toast.error('❌ ليس لديك صلاحية لحذف الطلبات');
@@ -277,21 +280,37 @@ const AppContent = () => {
   }, [editingPurchase, refreshPurchases, updateNextRequestNumber]);
 
   // ============================================
-  // ✅ دوال البحث والفلترة
+  // ✅ دوال البحث والفلترة والترقيم
   // ============================================
 
   const handleSearch = useCallback((search: string) => {
+    console.log('🔍 Searching:', search);
     setFilters(prev => ({ ...prev, search: search || undefined, page: 1 }));
   }, []);
 
   const handleFilterChange = useCallback((newFilters: PurchaseFilters) => {
+    console.log('🔍 Filter change:', newFilters);
     setFilters(prev => ({ ...prev, ...newFilters, page: 1 }));
   }, []);
 
   const handlePageChange = useCallback((page: number) => {
-    setFilters(prev => ({ ...prev, page }));
+    console.log('🔄 ===== PAGE CHANGE =====');
+    console.log('🔄 Requested page:', page);
+    console.log('🔄 Current page:', filters.page);
+    console.log('🔄 Total pages:', totalPages);
+    
+    if (page < 1 || page > totalPages) {
+      console.warn('⚠️ Page out of range:', page);
+      return;
+    }
+    
+    setFilters(prev => {
+      console.log('📄 Updating page from', prev.page, 'to', page);
+      return { ...prev, page };
+    });
+    
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+  }, [filters.page, totalPages]);
 
   // ============================================
   // ✅ تصدير إلى Excel
@@ -340,7 +359,6 @@ const AppContent = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-2 sm:p-4 md:p-8">
-      {/* ✅ رسالة الدعوة للوالدين - تظهر عند كل تسجيل دخول */}
       {showDedication && user && <ParentsDedication onClose={handleCloseDedication} />}
 
       <Toaster 
@@ -435,13 +453,13 @@ const AppContent = () => {
           </div>
         </header>
 
-        {/* ✅ المحتوى الرئيسي - Home يحتوي الآن على Dashboard */}
+        {/* المحتوى الرئيسي */}
         <Home 
           onOpenAddForm={handleAdd}
           onOpenAlerts={() => setShowAlerts(true)}
         />
 
-        {/* ✅ الفلتر والجدول */}
+        {/* الفلتر والجدول */}
         <Filters 
           onFilterChange={handleFilterChange}
           onSearch={handleSearch}
@@ -465,11 +483,14 @@ const AppContent = () => {
           />
         </div>
 
+        {/* ✅ Pagination */}
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={handlePageChange}
           loading={loading}
+          totalItems={total}
+          itemsPerPage={10}
         />
 
         {/* MODALS */}
