@@ -1,5 +1,5 @@
 // frontend/src/components/PurchaseForm.tsx
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import type { Purchase } from '../types/purchase.types';
 
 interface Props {
@@ -35,8 +35,27 @@ const PurchaseForm: React.FC<Props> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const isEditing = !!purchase;
 
+  // ✅ Ref للتمرير التلقائي
+  const formRef = useRef<HTMLFormElement>(null);
+
   // ============================================
-  // ✅ تحديث الفورم عند تغيير nextRequestNumber (الإضافة الجديدة)
+  // ✅ Auto-scroll عند فتح الفورم
+  // ============================================
+
+  useEffect(() => {
+    // ✅ تمرير تلقائي إلى الفورم عند التحميل
+    setTimeout(() => {
+      if (formRef.current) {
+        formRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+    }, 150);
+  }, []);
+
+  // ============================================
+  // ✅ تحديث الفورم عند تغيير nextRequestNumber
   // ============================================
 
   useEffect(() => {
@@ -49,7 +68,7 @@ const PurchaseForm: React.FC<Props> = ({
         setErrors(prev => ({ ...prev, request_number: '' }));
       }
     }
-  }, [nextRequestNumber, isEditing]);
+  }, [nextRequestNumber, isEditing, errors.request_number]);
 
   // ============================================
   // ✅ تحميل البيانات للتعديل
@@ -72,13 +91,12 @@ const PurchaseForm: React.FC<Props> = ({
   }, [purchase]);
 
   // ============================================
-  // ✅ التحقق من صحة البيانات - النسخة المعدلة (الحقول الأساسية فقط)
+  // ✅ التحقق من صحة البيانات
   // ============================================
 
   const validateForm = (data: typeof formData): Record<string, string> => {
     const errors: Record<string, string> = {};
     
-    // ✅ الحقول الأساسية فقط (مطلوبة)
     if (!data.request_number.trim()) {
       errors.request_number = 'رقم الطلب مطلوب';
     }
@@ -95,18 +113,6 @@ const PurchaseForm: React.FC<Props> = ({
       errors.description = 'وصف الطلب مطلوب';
     }
     
-    // ✅ الحقول الاختيارية - تنبيه فقط وليس خطأ
-    if (!data.receiver.trim()) {
-      // ⚠️ تنبيه فقط، وليس خطأ إلزامي
-      // errors.receiver = 'المستلم مطلوب (يمكن تركه فارغاً)';
-    }
-    
-    if (!data.delivery_date) {
-      // ⚠️ تنبيه فقط، وليس خطأ إلزامي
-      // errors.delivery_date = 'تاريخ التسليم مطلوب (سيتم تعيينه تلقائياً)';
-    }
-    
-    // ✅ التحقق من صحة التواريخ فقط إذا تم إرسال كليهما
     if (data.date && data.delivery_date && data.delivery_date < data.date) {
       errors.delivery_date = 'تاريخ التسليم يجب أن يكون بعد تاريخ الطلب';
     }
@@ -141,7 +147,7 @@ const PurchaseForm: React.FC<Props> = ({
   };
 
   // ============================================
-  // ✅ معالج الإرسال (المعدل)
+  // ✅ معالج الإرسال
   // ============================================
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -149,7 +155,6 @@ const PurchaseForm: React.FC<Props> = ({
     
     console.log('📤 Form submitted');
     
-    // ✅ التحقق من صحة البيانات
     const allErrors = validateForm(formData);
     setErrors(allErrors);
     
@@ -169,15 +174,14 @@ const PurchaseForm: React.FC<Props> = ({
       return;
     }
     
-    // ✅ إعداد البيانات للإرسال (مع قيم افتراضية للحقول الاختيارية)
     const submitData = {
       request_number: formData.request_number.trim(),
       date: formData.date,
       requester: formData.requester.trim(),
       invoice_owner: formData.invoice_owner?.trim() || '',
       description: formData.description.trim(),
-      receiver: formData.receiver?.trim() || 'غير محدد',        // ✅ قيمة افتراضية
-      delivery_date: formData.delivery_date || new Date().toISOString().split('T')[0], // ✅ قيمة افتراضية
+      receiver: formData.receiver?.trim() || 'غير محدد',
+      delivery_date: formData.delivery_date || new Date().toISOString().split('T')[0],
       status: formData.status || 'قيد التنفيذ',
       notes: formData.notes?.trim() || ''
     };
@@ -196,10 +200,6 @@ const PurchaseForm: React.FC<Props> = ({
     }
   };
 
-  // ============================================
-  // ✅ المتغيرات
-  // ============================================
-
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
 
   // ============================================
@@ -207,7 +207,11 @@ const PurchaseForm: React.FC<Props> = ({
   // ============================================
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto">
+    <form 
+      ref={formRef}
+      onSubmit={handleSubmit} 
+      className="bg-white p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto scroll-smooth"
+    >
       <div className="flex justify-between items-center mb-6 border-b pb-3">
         <h2 className="text-2xl font-bold text-gray-800">
           {isEditing ? '✏️ تعديل طلب' : '➕ إضافة طلب جديد'}
@@ -312,7 +316,7 @@ const PurchaseForm: React.FC<Props> = ({
           <p className="text-xs text-gray-400 mt-1">اختياري - يمكن تركه فارغاً</p>
         </div>
         
-        {/* المستلم - أصبح اختيارياً */}
+        {/* المستلم */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             المستلم <span className="text-gray-400">(اختياري)</span>
@@ -358,7 +362,7 @@ const PurchaseForm: React.FC<Props> = ({
           )}
         </div>
         
-        {/* تاريخ التسليم - أصبح اختيارياً */}
+        {/* تاريخ التسليم */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             تاريخ التسليم <span className="text-gray-400">(اختياري)</span>
