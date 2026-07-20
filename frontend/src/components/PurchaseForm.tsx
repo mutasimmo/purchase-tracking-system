@@ -36,9 +36,9 @@ const PurchaseForm: React.FC<Props> = ({
   const isEditing = !!purchase;
 
   // ✅ Refs
-  const formRef = useRef<HTMLFormElement>(null); // ✅ للتمرير
+  const formRef = useRef<HTMLFormElement>(null);
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const mouseContainerRef = useRef<HTMLDivElement>(null); // ✅ لأحداث الماوس فقط
+  const mouseContainerRef = useRef<HTMLDivElement>(null);
 
   // ✅ حالة التمرير
   const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | 'none'>('none');
@@ -73,7 +73,6 @@ const PurchaseForm: React.FC<Props> = ({
   // ============================================
 
   const startScrolling = useCallback(() => {
-    // ✅ استخدم formRef للتمرير
     const container = formRef.current;
     if (!container) {
       animationRef.current = null;
@@ -114,7 +113,6 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // ✅ استخدم formRef للتمرير
     const container = formRef.current;
     if (!container) return;
     
@@ -122,9 +120,6 @@ const PurchaseForm: React.FC<Props> = ({
     const mouseY = e.clientY - rect.top;
     const height = rect.height;
     const maxScroll = container.scrollHeight - container.clientHeight;
-    
-    // ✅ للتصحيح - سترى الآن MaxScroll > 0
-    console.log('🖱️ Mouse Y:', Math.round(mouseY), 'Height:', Math.round(height), 'MaxScroll:', Math.round(maxScroll));
     
     if (maxScroll <= 0) {
       targetSpeedRef.current = 0;
@@ -174,7 +169,6 @@ const PurchaseForm: React.FC<Props> = ({
 
   const handleMouseEnter = useCallback(() => {
     setIsHovering(true);
-    console.log('🐭 Mouse entered container');
   }, []);
 
   const handleMouseLeave = useCallback(() => {
@@ -186,7 +180,6 @@ const PurchaseForm: React.FC<Props> = ({
       animationRef.current = null;
       isScrollingRef.current = false;
     }
-    console.log('🐭 Mouse left container');
   }, []);
 
   // ✅ تنظيف
@@ -319,7 +312,7 @@ const PurchaseForm: React.FC<Props> = ({
   const statusOptions = ['قيد التنفيذ', 'منجز', 'معلق', 'ملغي'];
 
   // ============================================
-  // ✅ 4. دوال مساعدة لعرض حالة التمرير
+  // ✅ 4. دوال مساعدة لعرض حالة التمرير (بدون نص)
   // ============================================
 
   const getScrollIcon = () => {
@@ -332,12 +325,6 @@ const PurchaseForm: React.FC<Props> = ({
     if (scrollDirection === 'up') return 'text-green-600 border-green-300 bg-green-50';
     if (scrollDirection === 'down') return 'text-blue-600 border-blue-300 bg-blue-50';
     return isHovering ? 'text-gray-600 border-gray-300 bg-gray-50' : 'text-gray-400 border-gray-200 bg-gray-50';
-  };
-
-  const getScrollText = () => {
-    if (scrollDirection === 'up') return 'تمرير لأعلى ⬆️';
-    if (scrollDirection === 'down') return 'تمرير لأسفل ⬇️';
-    return isHovering ? 'حرك الماوس للحواف' : 'مرر فوق المحتوى';
   };
 
   // ============================================
@@ -358,10 +345,9 @@ const PurchaseForm: React.FC<Props> = ({
         onMouseLeave={handleMouseLeave}
         className="relative"
       >
-        {/* ✅ مؤشر حالة التمرير */}
-        <div className={`absolute top-2 right-2 text-[10px] px-3 py-1.5 rounded-full border flex items-center gap-2 z-10 transition-all duration-300 ${getScrollColor()}`}>
-          <span className="text-base">{getScrollIcon()}</span>
-          <span className="font-medium">{getScrollText()}</span>
+        {/* ✅ مؤشر حالة التمرير - أيقونة فقط */}
+        <div className={`absolute top-2 right-2 text-base px-2 py-1 rounded-full border flex items-center gap-1 z-10 transition-all duration-300 ${getScrollColor()}`}>
+          <span>{getScrollIcon()}</span>
           {isHovering && (
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
           )}
