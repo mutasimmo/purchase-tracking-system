@@ -39,6 +39,9 @@ const PurchaseForm: React.FC<Props> = ({
   const firstInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // ✅ حالة للتمرير التلقائي
+  const [isHovering, setIsHovering] = useState(false);
+
   // ============================================
   // ✅ Auto-scroll عند فتح الفورم
   // ============================================
@@ -60,25 +63,42 @@ const PurchaseForm: React.FC<Props> = ({
   }, []);
 
   // ============================================
-  // ✅ دوال التمرير التلقائي - الحل البديل
+  // ✅ Auto-scroll عند تحريك الماوس - النسخة الصحيحة
   // ============================================
 
-  const scrollUp = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({
-        top: -100,
-        behavior: 'smooth'
-      });
-    }
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    // ✅ موقع الماوس داخل الفورم
+    const mouseY = e.clientY - rect.top;
+    const height = rect.height;
+    
+    // ✅ نسبة الماوس (0 = أعلى, 1 = أسفل)
+    const ratio = mouseY / height;
+    
+    // ✅ أقصى مسافة للتمرير
+    const maxScroll = container.scrollHeight - container.clientHeight;
+    
+    if (maxScroll <= 0) return;
+    
+    // ✅ حساب موضع التمرير بناءً على نسبة الماوس
+    // ratio = 0 → أعلى الصفحة (scrollTop = 0)
+    // ratio = 1 → أسفل الصفحة (scrollTop = maxScroll)
+    const targetScroll = ratio * maxScroll;
+    
+    // ✅ تطبيق التمرير
+    container.scrollTop = targetScroll;
   };
 
-  const scrollDown = () => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollBy({
-        top: 100,
-        behavior: 'smooth'
-      });
-    }
+  const handleMouseEnter = () => {
+    setIsHovering(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsHovering(false);
   };
 
   // ============================================
@@ -241,32 +261,19 @@ const PurchaseForm: React.FC<Props> = ({
     >
       <div 
         ref={scrollContainerRef}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         className="relative"
       >
-        {/* ✅ أزرار التمرير التلقائي */}
-        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
-          <button
-            type="button"
-            onMouseEnter={scrollUp}
-            className="w-8 h-8 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center text-sm"
-            title="تمرير لأعلى"
-          >
-            <i className="fas fa-chevron-up"></i>
-          </button>
-          <button
-            type="button"
-            onMouseEnter={scrollDown}
-            className="w-8 h-8 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors flex items-center justify-center text-sm"
-            title="تمرير لأسفل"
-          >
-            <i className="fas fa-chevron-down"></i>
-          </button>
-        </div>
-
         {/* ✅ مؤشر التمرير التلقائي */}
-        <div className="absolute top-2 right-2 bg-blue-500/10 text-blue-600 text-[10px] px-2 py-1 rounded-full border border-blue-200/50 flex items-center gap-1.5 z-10">
-          <i className="fas fa-mouse-pointer text-[10px]"></i>
-          <span>مرر الماوس على الأسهم</span>
+        <div className={`absolute top-2 right-2 text-[10px] px-2 py-1 rounded-full border flex items-center gap-1.5 z-10 transition-all duration-300 ${
+          isHovering 
+            ? 'bg-green-500/20 text-green-600 border-green-300' 
+            : 'bg-blue-500/10 text-blue-600 border-blue-200/50'
+        }`}>
+          <i className={`fas ${isHovering ? 'fa-check-circle' : 'fa-mouse-pointer'} text-[10px]`}></i>
+          <span>{isHovering ? '✅ التمرير التلقائي مفعل' : 'حرك الماوس للتمرير التلقائي'}</span>
         </div>
 
         <div className="flex justify-between items-center mb-6 border-b pb-3">
