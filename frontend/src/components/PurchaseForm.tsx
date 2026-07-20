@@ -35,15 +35,16 @@ const PurchaseForm: React.FC<Props> = ({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const isEditing = !!purchase;
 
-  // ✅ Ref للتمرير التلقائي
+  // ✅ Refs للتمرير والتركيز
   const formRef = useRef<HTMLFormElement>(null);
+  const firstInputRef = useRef<HTMLInputElement>(null);
 
   // ============================================
-  // ✅ Auto-scroll عند فتح الفورم
+  // ✅ Auto-scroll و Focus عند فتح الفورم
   // ============================================
 
   useEffect(() => {
-    // ✅ تمرير تلقائي إلى الفورم عند التحميل
+    // ✅ تمرير تلقائي إلى الفورم
     setTimeout(() => {
       if (formRef.current) {
         formRef.current.scrollIntoView({
@@ -51,6 +52,13 @@ const PurchaseForm: React.FC<Props> = ({
           block: 'center'
         });
       }
+      
+      // ✅ التركيز على أول حقل (رقم الطلب)
+      setTimeout(() => {
+        if (firstInputRef.current) {
+          firstInputRef.current.focus();
+        }
+      }, 300);
     }, 150);
   }, []);
 
@@ -229,12 +237,13 @@ const PurchaseForm: React.FC<Props> = ({
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* رقم الطلب */}
+        {/* رقم الطلب - مع ref للتركيز التلقائي */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             رقم الطلب <span className="text-red-500">*</span>
           </label>
           <input
+            ref={firstInputRef}
             type="text"
             name="request_number"
             value={formData.request_number}
